@@ -1,0 +1,15 @@
+# Середовище
+venv/
+
+# Кеші Python
+__pycache__/
+*.py[cod]
+
+# Секрети
+credentials.env
+.env
+
+# Інші
+certs/
+backups/
+full_backup.sh
