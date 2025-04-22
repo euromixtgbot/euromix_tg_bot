@@ -1,23 +1,14 @@
 import base64
-import requests
 from datetime import datetime
-from telegram import (
-    Update,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
-)
+from io import BytesIO
+
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 
-from config import (
-    MAKE_WEBHOOK_CREATE_TASK,
-    JIRA_DOMAIN,
-    JIRA_EMAIL,
-    JIRA_API_TOKEN,
-)
+from config import JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN
 from keyboards import make_keyboard, remove_keyboard, STEPS
 from services import (
-    create_task_in_make,
+    create_issue_in_jira,
     attach_file_to_jira,
     add_comment_to_jira,
     get_issue_status,
@@ -25,25 +16,25 @@ from services import (
 
 user_data = {}
 
-
+# ——————————————————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_data[uid] = {"step": 0}
     text, markup = make_keyboard(0)
     await update.message.reply_text(text, reply_markup=markup)
 
-
+# ——————————————————————————————————————————
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid not in user_data:
         await update.message.reply_text("Будь ласка, почніть з /start")
         return
 
-    text = update.message.text
+    text = update.message.text or ""
     step = user_data[uid]["step"]
     key = STEPS[step]
 
-    # Кнопка «Назад»
+    # ← Назад
     if text == "Назад":
         user_data[uid]["step"] = max(0, step - 1)
         txt, mkp = make_keyboard(
@@ -53,33 +44,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(txt, reply_markup=mkp)
         return
 
-    # Звичайні кроки збору даних
+    # Збір даних
     if key in ("division", "department", "service", "full_name"):
         user_data[uid][key] = text
 
-    # Опис проблеми крок
+    # Опис проблеми
     elif key == "description":
         user_data[uid].setdefault("description", "")
         user_data[uid]["description"] += text + "\n"
 
-    # Крок confirm: створити або додати текст
+    # Confirm-крок
     elif key == "confirm":
         if text == "Створити задачу":
-            await send_to_make(update, context)
+            await send_to_jira(update, context)
             return
         else:
-            # користувач додав ще текст до опису
             user_data[uid].setdefault("description", "")
             user_data[uid]["description"] += text + "\n"
-            # показуємо оновлений confirm
-            txt, mkp = make_keyboard(
-                step,
-                description=user_data[uid]["description"]
-            )
+            txt, mkp = make_keyboard(step, description=user_data[uid]["description"])
             await update.message.reply_text(txt, reply_markup=mkp)
             return
 
-    # Переходимо до наступного кроку (якщо він є)
+    # Перехід далі
     user_data[uid]["step"] = min(len(STEPS) - 1, step + 1)
     txt, mkp = make_keyboard(
         user_data[uid]["step"],
@@ -87,15 +73,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(txt, reply_markup=mkp)
 
-
+# ——————————————————————————————————————————
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid not in user_data:
         await update.message.reply_text("Будь ласка, почніть з /start")
         return
 
-    task_id = user_data[uid].get("task_id")
-    if not task_id:
+    issue_key = user_data[uid].get("task_id")
+    if not issue_key:
         await update.message.reply_text(
             "❗ Спочатку натисніть 'Створити задачу', а потім надсилайте файли."
         )
@@ -107,63 +93,53 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        file = await context.bot.get_file(doc.file_id)
-        content = await file.download_as_bytearray()
-        resp = await attach_file_to_jira(task_id, doc.file_name, content)
-
+        f = await context.bot.get_file(doc.file_id)
+        content = await f.download_as_bytearray()
+        resp = await attach_file_to_jira(issue_key, doc.file_name, content)
         if resp.status_code in (200, 201):
             await update.message.reply_text(f"✅ Файл '{doc.file_name}' прикріплено.")
         else:
-            await update.message.reply_text(
-                f"⛔ Не вдалося прикріпити файл. Статус: {resp.status_code}"
-            )
+            await update.message.reply_text(f"⛔ Не вдалося прикріпити файл. Код: {resp.status_code}")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Помилка при надсиланні файлу: {e}")
 
-
-async def send_to_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ——————————————————————————————————————————
+async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Створює issue в Jira без Make.com."""
     uid = update.effective_user.id
-    payload = {
-        "username": update.effective_user.username,
-        "telegram_id": uid,
+    data = {
         "division": user_data[uid].get("division"),
         "department": user_data[uid].get("department"),
         "service": user_data[uid].get("service"),
         "full_name": user_data[uid].get("full_name"),
-        "description": user_data[uid].get("description"),
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "description": user_data[uid].get("description", ""),
     }
-
-    try:
-        result = await create_task_in_make(payload)
-        task_id = result.get("task_id")
-        if not task_id:
-            raise ValueError("task_id не повернувся")
-        user_data[uid]["task_id"] = task_id
-
+    result = await create_issue_in_jira(data)
+    if "key" in result:
+        issue_key = result["key"]
+        user_data[uid]["task_id"] = issue_key
         await update.message.reply_text(
-            f"✅ Задача створена: {task_id}", reply_markup=remove_keyboard()
+            f"✅ Задача створена: {issue_key}",
+            reply_markup=ReplyKeyboardRemove()
         )
         mkp = ReplyKeyboardMarkup(
             [[KeyboardButton("Перевірити статус задачі")]],
             resize_keyboard=True
         )
-        await update.message.reply_text("Перевірити статус задачі", reply_markup=mkp)
+        await update.message.reply_text("Тепер ви можете надсилати файли або коментарі.", reply_markup=mkp)
+    else:
+        await update.message.reply_text(f"❌ Помилка створення задачі: {result.get('error')}")
 
-    except Exception as e:
-        await update.message.reply_text(f"❌ Помилка при створенні задачі: {e}")
-
-
+# ——————————————————————————————————————————
 async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    task_id = user_data.get(uid, {}).get("task_id")
-    if not task_id:
+    issue_key = user_data.get(uid, {}).get("task_id")
+    if not issue_key:
         await update.message.reply_text("Немає активної задачі.")
         return
-
     try:
-        status = await get_issue_status(task_id)
-        await update.message.reply_text(f"Статус задачі {task_id}: {status}")
+        status = await get_issue_status(issue_key)
+        await update.message.reply_text(f"Статус задачі {issue_key}: {status}")
         if status.lower() == "готово":
             mkp = ReplyKeyboardMarkup(
                 [[KeyboardButton("Старт. Створити нову заявку")]],
@@ -174,27 +150,28 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
 
-
+# ——————————————————————————————————————————
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    task_id = user_data.get(uid, {}).get("task_id")
-    if not task_id:
+    issue_key = user_data.get(uid, {}).get("task_id")
+    if not issue_key:
         await update.message.reply_text("Немає активної задачі.")
         return
 
     comment = update.message.text.strip()
     try:
-        resp = await add_comment_to_jira(task_id, comment)
+        resp = await add_comment_to_jira(issue_key, comment)
         if resp.status_code == 201:
             await update.message.reply_text("✅ Коментар додано.")
+        elif resp.status_code == 404:
+            await update.message.reply_text("⛔ Задачу не знайдено або бракує прав.")
         else:
             await update.message.reply_text(f"⛔ Помилка додавання коментаря: {resp.status_code}")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Помилка при додаванні коментаря: {e}")
 
-
+# ——————————————————————————————————————————
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Спершу обробляємо файли
     if update.message.document:
         await handle_document(update, context)
         return
@@ -205,8 +182,6 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "Перевірити статус задачі":
         await check_status(update, context)
     elif user_data.get(update.effective_user.id, {}).get("task_id"):
-        # все інше після створення задачі — коментарі
         await add_comment_handler(update, context)
     else:
         await handle_message(update, context)
-
