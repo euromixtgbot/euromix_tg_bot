@@ -1,24 +1,27 @@
-# 1) Створюємо config.py, який зчитує змінні з credentials.env
 import os
 from dotenv import load_dotenv
+import logging
 
-# Підвантажуємо змінні оточення з файлу credentials.env
-load_dotenv('credentials.env')
-# DEBUG: виводимо прочитані змінні в лог
-print("→ Loaded TOKEN:", os.getenv("TOKEN")[:10] + "…")
-print("→ Loaded JIRA_EMAIL:", os.getenv("JIRA_EMAIL"))
-# Telegram
-TOKEN                = os.getenv('TOKEN')
-WEBHOOK_URL          = os.getenv('WEBHOOK_URL')
+# Налаштування логування для config
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
-# Make.com
-#MAKE_WEBHOOK_CREATE_TASK = os.getenv('MAKE_WEBHOOK_CREATE_TASK')
-# Jira
-JIRA_DOMAIN          = os.getenv('JIRA_DOMAIN')
-JIRA_EMAIL           = os.getenv('JIRA_EMAIL')
-JIRA_API_TOKEN       = os.getenv('JIRA_API_TOKEN')
-JIRA_PROJECT_KEY = "TES1"        # ← ключ вашого проекту в Jira
-JIRA_ISSUE_TYPE = "tgtask"         # ← тип створюваної задачі
-# SSL для webhook
-SSL_CERT_PATH        = os.getenv('SSL_CERT_PATH')
-SSL_KEY_PATH         = os.getenv('SSL_KEY_PATH')
+# Завантажуємо .env із тим самим каталогом, де лежить config.py
+base_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(base_dir, 'credentials.env'))
+
+# DEBUG: покажемо, що зчиталося
+log.info("CONFIG: TOKEN      = %s…", os.getenv("TOKEN")[:10])
+log.info("CONFIG: JIRA_EMAIL = %s", os.getenv("JIRA_EMAIL"))
+# НЕ виводимо весь токен у лог, лише перевіримо, що він не None/порожній
+log.info("CONFIG: JIRA_API_TOKEN exists? %s", bool(os.getenv("JIRA_API_TOKEN")))
+
+# Тепер змінні
+TOKEN           = os.getenv('TOKEN')
+JIRA_DOMAIN     = os.getenv('JIRA_DOMAIN')
+JIRA_EMAIL      = os.getenv('JIRA_EMAIL')
+JIRA_API_TOKEN  = os.getenv('JIRA_API_TOKEN')
+JIRA_PROJECT_KEY = os.getenv('JIRA_PROJECT_KEY') or "TES1"
+JIRA_ISSUE_TYPE  = os.getenv('JIRA_ISSUE_TYPE') or "tgtask"
+SSL_CERT_PATH   = os.getenv('SSL_CERT_PATH')
+SSL_KEY_PATH    = os.getenv('SSL_KEY_PATH')
