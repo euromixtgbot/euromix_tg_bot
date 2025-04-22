@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 
 # Підвантажуємо змінні оточення з файлу credentials.env
 load_dotenv('credentials.env')
-
+# DEBUG: виводимо прочитані змінні в лог
+print("→ Loaded TOKEN:", os.getenv("TOKEN")[:10] + "…")
+print("→ Loaded JIRA_EMAIL:", os.getenv("JIRA_EMAIL"))
 # Telegram
 TOKEN                = os.getenv('TOKEN')
 WEBHOOK_URL          = os.getenv('WEBHOOK_URL')
