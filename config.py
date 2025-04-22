@@ -1,30 +1,26 @@
+# config.py
 import os
-from dotenv import load_dotenv
 import logging
+from dotenv import load_dotenv
 
-# Налаштування логування для config
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-# Завантажуємо .env із тим самим каталогом, де лежить config.py
 base_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(base_dir, 'credentials.env'))
 
-# DEBUG: покажемо, що зчиталося
-log.info("CONFIG: TOKEN      = %s…", os.getenv("TOKEN")[:10])
-log.info("CONFIG: JIRA_EMAIL = %s", os.getenv("JIRA_EMAIL"))
-# НЕ виводимо весь токен у лог, лише перевіримо, що він не None/порожній
-log.info("CONFIG: JIRA_API_TOKEN exists? %s", bool(os.getenv("JIRA_API_TOKEN")))
+# Debug loaded values
+token = os.getenv('JIRA_API_TOKEN') or ''
+log.info("CONFIG: TOKEN repr=%r length=%d", os.getenv('TOKEN'), len(os.getenv('TOKEN') or ""))
+log.info("CONFIG: JIRA_EMAIL repr=%r length=%d", os.getenv('JIRA_EMAIL'), len(os.getenv('JIRA_EMAIL') or ""))
+log.info("CONFIG: JIRA_API_TOKEN repr=%r length=%d", token, len(token))
 
-# Тепер змінні
-TOKEN           = os.getenv('TOKEN')
-JIRA_DOMAIN     = os.getenv('JIRA_DOMAIN')
-JIRA_EMAIL      = os.getenv('JIRA_EMAIL')
-JIRA_API_TOKEN  = os.getenv('JIRA_API_TOKEN')
-JIRA_PROJECT_KEY = os.getenv('JIRA_PROJECT_KEY') or "TES1"
-JIRA_ISSUE_TYPE  = os.getenv('JIRA_ISSUE_TYPE') or "tgtask"
-
-JIRA_REPORTER_ACCOUNT_ID = os.getenv("JIRA_REPORTER_ACCOUNT_ID")
-
-SSL_CERT_PATH   = os.getenv('SSL_CERT_PATH')
-SSL_KEY_PATH    = os.getenv('SSL_KEY_PATH')
+TOKEN = os.getenv('TOKEN')
+JIRA_DOMAIN = os.getenv('JIRA_DOMAIN')
+JIRA_EMAIL = os.getenv('JIRA_EMAIL')
+JIRA_API_TOKEN = token
+JIRA_PROJECT_KEY = os.getenv('JIRA_PROJECT_KEY')
+JIRA_ISSUE_TYPE = os.getenv('JIRA_ISSUE_TYPE')
+JIRA_REPORTER_ACCOUNT_ID = os.getenv('JIRA_REPORTER_ACCOUNT_ID')
+SSL_CERT_PATH = os.getenv('SSL_CERT_PATH')
+SSL_KEY_PATH = os.getenv('SSL_KEY_PATH')
