@@ -23,5 +23,8 @@ JIRA_EMAIL      = os.getenv('JIRA_EMAIL')
 JIRA_API_TOKEN  = os.getenv('JIRA_API_TOKEN')
 JIRA_PROJECT_KEY = os.getenv('JIRA_PROJECT_KEY') or "TES1"
 JIRA_ISSUE_TYPE  = os.getenv('JIRA_ISSUE_TYPE') or "tgtask"
+
+JIRA_REPORTER_ACCOUNT_ID = os.getenv("JIRA_REPORTER_ACCOUNT_ID")
+
 SSL_CERT_PATH   = os.getenv('SSL_CERT_PATH')
 SSL_KEY_PATH    = os.getenv('SSL_KEY_PATH')
