@@ -18,6 +18,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if uid not in user_data:
+        await update.message.reply_text("Будь ласка, почніть з /start")
+        return
     text = update.message.text
     step = user_data[uid]["step"]
 
@@ -43,6 +46,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if uid not in user_data:
+        await update.message.reply_text("Будь ласка, почніть з /start")
+        return
     task_id = user_data.get(uid, {}).get("task_id")
     if not task_id:
         await update.message.reply_text("Немає активної задачі. /start")
@@ -63,6 +69,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_to_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if uid not in user_data:
+        await update.message.reply_text("Будь ласка, почніть з /start")
+        return
     payload = {
         "username": update.effective_user.username,
         "telegram_id": uid,
@@ -80,6 +89,9 @@ async def send_to_make(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if uid not in user_data:
+        await update.message.reply_text("Будь ласка, почніть з /start")
+        return
     tid = user_data.get(uid, {}).get("task_id")
     if not tid:
         await update.message.reply_text("Немає ID")
@@ -89,6 +101,9 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    if uid not in user_data:
+        await update.message.reply_text("Будь ласка, почніть з /start")
+        return
     tid = user_data.get(uid, {}).get("task_id")
     if not tid:
         await update.message.reply_text("Немає ID")

@@ -4,8 +4,11 @@ from config import MAKE_WEBHOOK_CREATE_TASK, JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_T
 
 async def create_task_in_make(payload: dict) -> dict:
     async with httpx.AsyncClient() as client:
-        r = await client.post(MAKE_WEBHOOK_CREATE_TASK, json=payload, timeout=10.0)
-        r.raise_for_status()
+        try:
+            r = await client.post(MAKE_WEBHOOK_CREATE_TASK, json=payload, timeout=10.0)
+            r.raise_for_status()
+        except httpx.RequestError as exc:
+            return {"error": f"HTTP error occurred: {exc}"}
         return r.json()
 
 def _jira_auth_header() -> dict:

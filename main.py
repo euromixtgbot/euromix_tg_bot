@@ -1,11 +1,15 @@
 import logging
 import os
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
+from telegram.error import TelegramError
 
 from config import TOKEN, WEBHOOK_URL, SSL_CERT_PATH, SSL_KEY_PATH
 import handlers
 
 logging.basicConfig(level=logging.INFO)
+
+async def error_handler(update, context):
+    logging.error(f"Update {update} caused error {context.error}")
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
@@ -14,6 +18,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", handlers.start))
     app.add_handler(MessageHandler(filters.Document.ALL, handlers.handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.universal_handler))
+
+    app.add_error_handler(error_handler)
 
     # Запускаємо webhook
     app.run_webhook(
