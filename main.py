@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import logging
 import os
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
-from telegram.error import TelegramError
-from aiohttp import web
+from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-import handlers
 from config import TOKEN, WEBHOOK_URL, SSL_CERT_PATH, SSL_KEY_PATH
+import handlers
 
+# Логування
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -23,21 +23,17 @@ async def error_handler(update, context):
             pass
 
 def main():
-    application = ApplicationBuilder().token(TOKEN).build()
+    # будуємо Telegram-додаток
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # передаємо bot у aiohttp app для handlers.jira_webhook
-    application.bot_app['bot'] = application.bot
+    # хендлери з handlers.py
+    app.add_handler(CommandHandler("start", handlers.start))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO, handlers.handle_media))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.universal_handler))
+    app.add_error_handler(error_handler)
 
-    # Telegram-хендлери
-    application.add_handler(CommandHandler("start", handlers.start))
-    application.add_handler(MessageHandler(filters.ALL, handlers.universal_handler))
-    application.add_error_handler(error_handler)
-
-    # додаємо маршрут для Jira
-    application.bot_app.router.add_post("/jira-webhook", handlers.jira_webhook)
-
-    # запускаємо webhook (Telegram)
-    application.run_webhook(
+    # запускаємо webhook
+    app.run_webhook(
         listen="0.0.0.0",
         port=int(os.getenv("PORT", 8443)),
         url_path="webhook",
