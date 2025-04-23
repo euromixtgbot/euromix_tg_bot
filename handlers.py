@@ -95,7 +95,8 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
             resize_keyboard=True
         )
         await update.message.reply_text(
-            "Щоб перевірити статус задачі, натисніть кнопку нижче",
+            "Щоб перевірити статус задачі, натисніть кнопку нижче.\n"
+            "Кожне Ваше наступне повідомлення додасть коментар до створеної задачі.",
             reply_markup=markup
         )
     else:
