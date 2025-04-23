@@ -1,6 +1,10 @@
+# handlers.py
+
 from datetime import datetime
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
+from aiohttp import web
+
 from keyboards import make_keyboard, remove_keyboard, STEPS
 from services import (
     create_jira_issue,
@@ -9,6 +13,7 @@ from services import (
     get_issue_status
 )
 
+# Зберігаємо стан користувачів
 user_data: dict[int, dict] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -62,17 +67,12 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if code == 201:
         issue_key = result["json"]["key"]
         user_data[uid]["task_id"] = issue_key
-        # перша відповідь
         await update.message.reply_text(f"✅ Задача створена: {issue_key}", reply_markup=remove_keyboard())
-        # кнопка статусу
         markup = ReplyKeyboardMarkup(
             [[KeyboardButton("Перевірити статус задачі")]],
             resize_keyboard=True
         )
-        await update.message.reply_text(
-            "Щоб перевірити статус задачі, натисніть кнопку нижче.\n"
-            "Кожне Ваше наступне повідомлення додасть коментар до створеної задачі.",
-            reply_markup=markup)
+        await update.message.reply_text("Перевірити статус задачі", reply_markup=markup)
     else:
         err = result["json"].get("errorMessages") or result["json"]
         await update.message.reply_text(f"❌ Помилка створення задачі: {code}: {err}")
@@ -82,32 +82,21 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if uid not in user_data or "task_id" not in user_data[uid]:
         await update.message.reply_text("❗ Спочатку натисніть 'Створити задачу', а потім надсилайте файли.")
         return
-
     tid = user_data[uid]["task_id"]
-    file_obj = None
-    filename = None
 
-    # будь-який тип media/document/photo/video/audio
     if update.message.document:
-        file_obj = update.message.document
-        filename = file_obj.file_name
+        blob = update.message.document; filename = blob.file_name
     elif update.message.photo:
-        # останній (найбільший) розмір
-        file_obj = update.message.photo[-1]
-        filename = f"photo_{datetime.now().strftime('%H%M%S')}.jpg"
+        blob = update.message.photo[-1]; filename = f"photo_{datetime.now().strftime('%H%M%S')}.jpg"
     elif update.message.video:
-        file_obj = update.message.video
-        filename = file_obj.file_name or f"video_{file_obj.file_id}.mp4"
+        blob = update.message.video; filename = blob.file_name or f"video_{blob.file_id}.mp4"
     elif update.message.audio:
-        file_obj = update.message.audio
-        filename = file_obj.file_name or f"audio_{file_obj.file_id}.mp3"
+        blob = update.message.audio; filename = blob.file_name or f"audio_{blob.file_id}.mp3"
     else:
-        await update.message.reply_text("⚠️ Непідтримуваний тип файлу.")
-        return
+        await update.message.reply_text("⚠️ Непідтримуваний тип файлу."); return
 
-    # завантажити bytes
-    f = await context.bot.get_file(file_obj.file_id)
-    content = await f.download_as_bytearray()
+    file = await context.bot.get_file(blob.file_id)
+    content = await file.download_as_bytearray()
     resp = await attach_file_to_jira(tid, filename, content)
     if resp.status_code in (200,201):
         await update.message.reply_text(f"✅ '{filename}' прикріплено")
@@ -118,8 +107,7 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tid = user_data.get(uid,{}).get("task_id")
     if not tid:
-        await update.message.reply_text("Немає активної задачі.")
-        return
+        await update.message.reply_text("Немає активної задачі."); return
     try:
         st = await get_issue_status(tid)
         await update.message.reply_text(f"Статус {tid}: {st}")
@@ -130,14 +118,29 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     uid = update.effective_user.id
     tid = user_data.get(uid,{}).get("task_id")
     if not tid:
-        await update.message.reply_text("Немає активної задачі.")
-        return
+        await update.message.reply_text("Немає активної задачі."); return
     c = update.message.text.strip()
     resp = await add_comment_to_jira(tid, c)
     if resp.status_code == 201:
         await update.message.reply_text("✅ Коментар додано")
     else:
         await update.message.reply_text(f"⛔ Помилка додавання коментаря: {resp.status_code}")
+
+# --- НОВИЙ ОБРОБНИК ДЛЯ JIRA WEBHOOK ---
+async def jira_webhook(request: web.Request):
+    """
+    Отримує POST від Jira (issue:comment_created) на /jira-webhook
+    і шле повідомлення авторам задачі в Telegram.
+    """
+    data = await request.json()
+    if data.get("webhookEvent") == "comment_created":
+        issue = data["issue"]["key"]
+        comment = data["comment"]["body"]
+        # знайти всіх, хто створив цю задачу в сесії user_data
+        for uid, info in user_data.items():
+            if info.get("task_id") == issue:
+                await request.app['bot'].send_message(uid, f"🆕 Новий коментар у {issue}:\n{comment}")
+    return web.Response(text="ok")
 
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
