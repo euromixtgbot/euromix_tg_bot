@@ -4,7 +4,7 @@ import os
 from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-from config import TOKEN, WEBHOOK_URL, SSL_CERT_PATH, SSL_KEY_PATH
+from config import TOKEN, WEBHOOK_URL
 import handlers
 
 # Logging
@@ -25,7 +25,7 @@ async def error_handler(update, context):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Добавляем обработчик ошибок
+    # Error handler
     app.add_error_handler(error_handler)
 
     # Handlers
@@ -33,13 +33,12 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO, handlers.handle_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.universal_handler))
 
-    # Run webhook
+    # Run webhook behind nginx (no SSL here)
     app.run_webhook(
         listen="127.0.0.1",
         port=int(os.getenv("PORT", 8443)),
         url_path="webhook",
-        webhook_url=WEBHOOK_URL,
-        # Не указываем SSL-сертификаты — nginx их обрабатывает
+        webhook_url=WEBHOOK_URL
     )
 
 if __name__ == "__main__":
