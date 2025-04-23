@@ -94,7 +94,10 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [[KeyboardButton("Перевірити статус задачі")]],
             resize_keyboard=True
         )
-       
+        await update.message.reply_text(
+            "Щоб перевірити статус задачі, натисніть кнопку нижче",
+            reply_markup=markup
+        )
     else:
         err = result.get("json", {}).get("errorMessages", result.get("error"))
         await update.message.reply_text(f"❌ Помилка створення задачі: {status}: {err}")
