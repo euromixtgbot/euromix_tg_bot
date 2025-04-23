@@ -1,98 +1,65 @@
-# -*- coding: utf-8 -*-
-# services.py
 import base64
 import httpx
-from io import BytesIO
 from config import (
-    JIRA_DOMAIN,
-    JIRA_EMAIL,
-    JIRA_API_TOKEN,
-    JIRA_PROJECT_KEY,
-    JIRA_ISSUE_TYPE,
-    JIRA_REPORTER_ACCOUNT_ID,
+    JIRA_DOMAIN, JIRA_EMAIL, JIRA_API_TOKEN,
+    JIRA_PROJECT_KEY, JIRA_ISSUE_TYPE, JIRA_REPORTER_ACCOUNT_ID
 )
 
-
-def _jira_headers(json: bool = True) -> dict:
-    """
-    Формує заголовки для Jira API: Basic auth та Content-Type.
-    """
+def _jira_auth_header() -> dict:
     token = base64.b64encode(f"{JIRA_EMAIL}:{JIRA_API_TOKEN}".encode()).decode()
-    headers = {
+    return {
         "Authorization": f"Basic {token}",
         "Accept": "application/json",
+        "Content-Type": "application/json"
     }
-    if json:
-        headers["Content-Type"] = "application/json"
-    return headers
 
-
-async def create_issue_in_jira(data: dict) -> dict:
-    """
-    Створює Jira issue напряму, повертає {"key": issue_key} або {"error": message}.
-    Очікує data з полями: division, department, service, full_name, description.
-    """
+async def create_jira_issue(summary: str, description: str) -> dict:
     url = f"{JIRA_DOMAIN}/rest/api/3/issue"
-
-    # Формуємо поля задачі
-    fields = {
-        "project": {"key": JIRA_PROJECT_KEY},
-        "issuetype": {"name": JIRA_ISSUE_TYPE},
-        "summary": f"{data['division']} / {data['department']} / {data['service']} — {data['full_name']}",
-        "description": data.get("description", ""),
-    }
-    # Додаємо reporter, якщо заданий
-    if JIRA_REPORTER_ACCOUNT_ID:
-        fields["reporter"] = {"accountId": JIRA_REPORTER_ACCOUNT_ID}
-
-    payload = {"fields": fields}
-    async with httpx.AsyncClient() as client:
-        try:
-            r = await client.post(url, headers=_jira_headers(json=True), json=payload, timeout=15.0)
-            r.raise_for_status()
-            return {"key": r.json().get("key")}  
-        except httpx.HTTPStatusError as e:
-            return {"error": f"Jira create failed {e.response.status_code}: {e.response.text}"}
-        except Exception as e:
-            return {"error": str(e)}
-
-
-async def attach_file_to_jira(issue_key: str, filename: str, content: bytes) -> httpx.Response:
-    """
-    Прикріплює файл до Jira issue, повертає HTTP response.
-    """
-    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_key}/attachments"
-    headers = {**_jira_headers(json=False), "X-Atlassian-Token": "no-check"}
-    files = {"file": (filename, BytesIO(content))}
-    async with httpx.AsyncClient() as client:
-        return await client.post(url, headers=headers, files=files)
-
-
-async def add_comment_to_jira(issue_key: str, comment: str) -> httpx.Response:
-    """
-    Додає коментар до Jira issue, повертає HTTP response.
-    """
-    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_key}/comment"
     payload = {
-        "body": {
-            "type": "doc",
-            "version": 1,
-            "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": comment}]}
-            ]
+        "fields": {
+            "project": {"key": JIRA_PROJECT_KEY},
+            "summary": summary,
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": description}]
+                }]
+            },
+            "issuetype": {"name": JIRA_ISSUE_TYPE},
+            "reporter": {"id": JIRA_REPORTER_ACCOUNT_ID}
         }
     }
     async with httpx.AsyncClient() as client:
-        return await client.post(url, headers=_jira_headers(json=True), json=payload)
+        r = await client.post(url, headers=_jira_auth_header(), json=payload, timeout=15.0)
+        return {"status_code": r.status_code, "json": r.json()}
 
-
-async def get_issue_status(issue_key: str) -> str:
-    """
-    Повертає назву статусу Jira issue.
-    """
-    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_key}"
+async def attach_file_to_jira(issue_id: str, filename: str, content: bytes) -> httpx.Response:
+    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}/attachments"
+    headers = {**_jira_auth_header(), "X-Atlassian-Token": "no-check"}
+    files = {"file": (filename, content)}
     async with httpx.AsyncClient() as client:
-        r = await client.get(url, headers=_jira_headers(json=False), timeout=10.0)
+        return await client.post(url, headers=headers, files=files)
+
+async def add_comment_to_jira(issue_id: str, comment: str) -> httpx.Response:
+    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}/comment"
+    body = {
+        "body": {
+            "type": "doc",
+            "version": 1,
+            "content": [{
+                "type": "paragraph",
+                "content": [{"type": "text", "text": comment}]
+            }]
+        }
+    }
+    async with httpx.AsyncClient() as client:
+        return await client.post(url, headers=_jira_auth_header(), json=body)
+
+async def get_issue_status(issue_id: str) -> str:
+    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}"
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=_jira_auth_header(), timeout=10.0)
         r.raise_for_status()
         return r.json()["fields"]["status"]["name"]
-
