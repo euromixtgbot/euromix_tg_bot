@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from config import TOKEN, WEBHOOK_URL, SSL_CERT_PATH, SSL_KEY_PATH
 import handlers
 
-# Логування
+# Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -23,16 +23,15 @@ async def error_handler(update, context):
             pass
 
 def main():
-    # будуємо Telegram-додаток
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # хендлери з handlers.py
+    # Handlers
     app.add_handler(CommandHandler("start", handlers.start))
     app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO, handlers.handle_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.universal_handler))
     app.add_error_handler(error_handler)
 
-    # запускаємо webhook
+    # Run as webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=int(os.getenv("PORT", 8443)),

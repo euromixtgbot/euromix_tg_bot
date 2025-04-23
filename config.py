@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 load_dotenv("credentials.env")
 
 # — Telegram —
-TOKEN = os.getenv("TOKEN")
-WEBHOOK_URL = os.getenv("https://botemix.com:8443/webhook")  # URL вашого webhook (напр. https://botemix.com:8443/webhook)
+TOKEN        = os.getenv("TOKEN")
+WEBHOOK_URL  = os.getenv("WEBHOOK_URL")  
 
 # — Jira —
 JIRA_DOMAIN               = os.getenv("JIRA_DOMAIN")
