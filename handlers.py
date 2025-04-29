@@ -69,7 +69,8 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
             add_ticket(
                 ticket_id=issue_key,
                 telegram_user_id=update.effective_user.id,
-                telegram_chat_id=update.effective_chat.id
+                telegram_chat_id=update.effective_chat.id, 
+                telegram_username=update.effective_user.username
             )
         except Exception as e:
             print(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
