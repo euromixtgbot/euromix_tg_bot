@@ -209,40 +209,29 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text or ""
 
-    # 1️⃣ Якщо надіслано файл
+    # Якщо це медіа — одразу передаємо у відповідну обробку
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
         return
 
-    # 2️⃣ Якщо користувач у режимі коментування
+    # Режим коментаря — обробка службових кнопок та коментарів
     if user_data.get(uid, {}).get("user_comment_mode"):
-        SERVICE_KEYWORDS = [
-            "⬅️ Вийти з режиму коментаря",
-            "Перевірити статус задачі",
-            "🧾 Мої заявки", "🧾 Мої задачі",
-            "🆕 Створити заявку",
-            "ℹ️ Допомога", "/start"
-        ]
+        SERVICE_COMMANDS = {
+            "⬅️ Вийти з режиму коментаря": lambda: exit_comment_mode(update, uid),
+            "Перевірити статус задачі": lambda: check_status(update, context),
+            "🧾 Мої заявки": lambda: mytickets_handler(update, context),
+            "🧾 Мої задачі": lambda: mytickets_handler(update, context),
+            "ℹ️ Допомога": lambda: start(update, context),
+            "/start": lambda: start(update, context)
+        }
 
-        if text == "⬅️ Вийти з режиму коментаря":
-            user_data[uid]["user_comment_mode"] = False
-            user_data[uid]["comment_task_id"] = None
-            await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
-        elif text == "Перевірити статус задачі":
-            await check_status(update, context)
-        elif text in ("🧾 Мої заявки", "🧾 Мої задачі"):
-            await mytickets_handler(update, context)
-        elif text == "🆕 Створити заявку":
-            user_data[uid] = {"step": 0}
-            txt, markup = make_keyboard(0)
-            await update.message.reply_text(txt, reply_markup=markup)
-        elif text in ("ℹ️ Допомога", "/start"):
-            await start(update, context)
+        if text in SERVICE_COMMANDS:
+            await SERVICE_COMMANDS[text]()
         else:
             await add_comment_handler(update, context)
         return
 
-    # 3️⃣ Звичайна логіка для користувача поза режимом коментаря
+    # Звичайний режим — основна логіка
     if text in ("/start", "ℹ️ Допомога"):
         await start(update, context)
     elif text in ("🧾 Мої заявки", "🧾 Мої задачі"):
@@ -259,3 +248,9 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await add_comment_handler(update, context)
     else:
         await handle_message(update, context)
+
+# Окремо додаємо функцію виходу з режиму коментаря
+async def exit_comment_mode(update: Update, uid: int):
+    user_data[uid]["user_comment_mode"] = False
+    user_data[uid]["comment_task_id"] = None
+    await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
