@@ -204,7 +204,14 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_media(update, context)
         return
 
-    # Пріоритет режиму коментаря
+    # Вийти з режиму коментаря (має найвищий пріоритет)
+    if text == "⬅️ Вийти з режиму коментаря":
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
+        await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+        return
+
+    # Пріоритет: режим коментаря
     if user_data.get(uid, {}).get("user_comment_mode"):
         await add_comment_handler(update, context)
         return
@@ -222,10 +229,6 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await check_status(update, context)
     elif text == "📝 Додати коментар до задачі":
         await choose_task_for_comment(update, context)
-    elif text == "⬅️ Вийти з режиму коментаря":
-        user_data[uid]["user_comment_mode"] = False
-        user_data[uid]["comment_task_id"] = None
-        await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
     elif user_data.get(uid, {}).get("task_id"):
         await add_comment_handler(update, context)
     else:
