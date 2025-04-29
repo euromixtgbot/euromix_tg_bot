@@ -128,7 +128,11 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tid = user_data.get(uid,{}).get("task_id")
     if not tid:
-        await update.message.reply_text("Немає активної задачі.")
+        mkp = ReplyKeyboardMarkup(
+            [[KeyboardButton("Створити задачу")]],
+            resize_keyboard=True
+        )
+        await update.message.reply_text("Немає активної задачі. Бажаєте створити нову?", reply_markup=mkp)
         return
     try:
         st = await get_issue_status(tid)
