@@ -68,10 +68,24 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
     query: CallbackQuery = update.callback_query
     await query.answer()
     uid = query.from_user.id
-    task_id = query.data.replace("comment_task_", "")
-    user_data[uid]["user_comment_mode"] = True
-    user_data[uid]["comment_task_id"] = task_id
-    await query.message.reply_text(f"✍️ Напишіть повідомлення — воно буде додано як коментар до {task_id}")
+
+    if query.data.startswith("comment_task_"):
+        task_id = query.data.replace("comment_task_", "")
+        user_data[uid]["user_comment_mode"] = True
+        user_data[uid]["comment_task_id"] = task_id
+
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Вийти з режиму коментаря", callback_data="exit_comment_mode")]
+        ])
+        await query.message.reply_text(
+            f"✍️ Напишіть повідомлення — воно буде додано як коментар до {task_id}",
+            reply_markup=markup
+        )
+
+    elif query.data == "exit_comment_mode":
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
+        await query.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     desc = user_data[uid].get("description", "").strip()
@@ -142,15 +156,27 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+
     if user_data.get(uid, {}).get("user_comment_mode"):
         tid = user_data[uid].get("comment_task_id")
-        comment = update.message.text.strip()
-        resp = await add_comment_to_jira(tid, comment)
-        if resp.status_code == 201:
-            await update.message.reply_text(f"✅ Коментар додано до задачі {tid}")
-        else:
-            await update.message.reply_text(f"⛔ Помилка додавання коментаря: {resp.status_code}")
+    else:
+        tid = user_data[uid].get("task_id")
+
+    if not tid:
+        await update.message.reply_text("❗ У вас немає активної задачі для коментаря.")
         return
+
+    comment = update.message.text.strip()
+    resp = await add_comment_to_jira(tid, comment)
+    if resp.status_code == 201:
+        await update.message.reply_text(f"✅ Коментар додано до задачі {tid}")
+    else:
+        await update.message.reply_text(f"⛔ Помилка додавання коментаря: {resp.status_code}")
+
+    # Скидаємо режим після ручного вибору
+    if user_data.get(uid, {}).get("user_comment_mode"):
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -195,7 +221,14 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
-    elif txt in ("/start", "ℹ️ Допомога"):
+        return
+
+    # ПРІОРИТЕТ: режим коментаря
+    if user_data.get(uid, {}).get("user_comment_mode"):
+        await add_comment_handler(update, context)
+        return
+
+    if txt in ("/start", "ℹ️ Допомога"):
         await start(update, context)
     elif txt == "🧾 Мої заявки":
         await mytickets_handler(update, context)
@@ -211,8 +244,6 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[uid]["user_comment_mode"] = False
         user_data[uid]["comment_task_id"] = None
         await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
-    elif user_data.get(uid, {}).get("user_comment_mode"):
-        await add_comment_handler(update, context)
     elif user_data.get(uid, {}).get("task_id"):
         await add_comment_handler(update, context)
     else:
