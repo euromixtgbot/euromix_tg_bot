@@ -4,8 +4,13 @@ import os
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from telegram.error import TelegramError
 
+from dotenv import load_dotenv  # <--- Додаємо для роботи з .env
+
 from config import TOKEN
 import handlers
+
+# Завантаження змінних оточення
+load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
