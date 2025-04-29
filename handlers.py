@@ -1,7 +1,9 @@
+#handlers.py
 from datetime import datetime
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
-from keyboards import make_keyboard, remove_keyboard, STEPS
+from google_sheets_service import get_user_tickets
+from keyboards import make_keyboard, remove_keyboard, STEPS, main_menu_markup
 from services import (
     create_jira_issue,
     attach_file_to_jira,
@@ -11,12 +13,41 @@ from services import (
 from google_sheets_service import add_ticket  # <--- додаємо імпорт
 
 user_data: dict[int, dict] = {}
+async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🆘 Допомога:\n"
+        "Цей бот дозволяє створювати задачі в Jira та перевіряти їх статус.\n"
+        "Ви можете надсилати файли, які будуть прикріплені до задачі.\n"
+        "Для початку натисніть /start."
+    )
+async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    tickets = get_user_tickets(uid)
+
+    if not tickets:
+        await update.message.reply_text("❗️ У вас немає створених заявок.")
+        return
+
+    # Сортуємо за Created_At, беремо останні 10
+    sorted_tickets = sorted(
+        tickets,
+        key=lambda t: t.get("Created_At", ""),
+        reverse=True
+    )[:10]
+
+    lines = []
+    for t in sorted_tickets:
+        ticket_id = t.get("Ticket_ID", "N/A")
+        status = t.get("Status", "Невідомо")
+        created_at = t.get("Created_At", "")
+        lines.append(f"📌 {ticket_id} — {status} ({created_at})")
+    msg = "🧾 Ваші останні заявки:\n\n" + "\n".join(lines)
+    await update.message.reply_text(msg)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_data[uid] = {"step": 0}
-    text, mkp = make_keyboard(0)
-    await update.message.reply_text(text, reply_markup=mkp)
+    await update.message.reply_text("👋 Вітаємо! Оберіть дію нижче:", reply_markup=main_menu_markup)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -128,11 +159,7 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tid = user_data.get(uid,{}).get("task_id")
     if not tid:
-        mkp = ReplyKeyboardMarkup(
-            [[KeyboardButton("Створити задачу")]],
-            resize_keyboard=True
-        )
-        await update.message.reply_text("Немає активної задачі. Бажаєте створити нову?", reply_markup=mkp)
+        await update.message.reply_text("Немає активної задачі.")
         return
     try:
         st = await get_issue_status(tid)
@@ -158,11 +185,17 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_media(update, context)
     else:
         txt = update.message.text or ""
-        if txt == "/start":
+        if txt in ("/start", "ℹ️ Допомога"):
             await start(update, context)
+        elif txt == "🧾 Мої заявки":
+            await mytickets_handler(update, context)
+        elif txt == "🆕 Створити заявку":
+            user_data[update.effective_user.id] = {"step": 0}
+            text, markup = make_keyboard(0)
+            await update.message.reply_text(text, reply_markup=markup)
         elif txt == "Перевірити статус задачі":
             await check_status(update, context)
-        elif user_data.get(update.effective_user.id,{}).get("task_id"):
+        elif user_data.get(update.effective_user.id, {}).get("task_id"):
             await add_comment_handler(update, context)
         else:
             await handle_message(update, context)

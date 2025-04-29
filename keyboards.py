@@ -1,6 +1,11 @@
+#keyboards.py
+
 from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
+# Основні етапи створення заявки
 STEPS = ["division", "department", "service", "full_name", "description", "confirm"]
+
+# Варіанти для кожного етапу
 OPTIONS = {
     "division": [
         "Офіс", "Дніпро", "PSC", "Київ", "Біла Церква", "Суми", "Вінниця",
@@ -21,7 +26,6 @@ OPTIONS = {
 
 def make_keyboard(step: int, description: str = ""):
     name = STEPS[step]
-    # якщо confirm — тільки кнопка створити
     if name == "confirm":
         buttons = [[KeyboardButton("Створити задачу")]]
     else:
@@ -41,3 +45,14 @@ def make_keyboard(step: int, description: str = ""):
 
 def remove_keyboard():
     return ReplyKeyboardRemove()
+
+# 🔽 Додано: головне меню після /start
+main_menu_markup = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("🧾 Мої заявки")],
+        [KeyboardButton("🆕 Створити заявку")],
+        [KeyboardButton("ℹ️ Допомога")]
+    ],
+    resize_keyboard=True
+)
+# 🔽 Додано: меню для кнопки "Допомога"
