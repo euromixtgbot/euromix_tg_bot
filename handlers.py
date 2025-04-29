@@ -209,28 +209,42 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text or ""
 
-    # 1️⃣ Якщо медіа — передаємо у відповідну обробку
+    # 1️⃣ Якщо медіа
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
         return
 
-    # 2️⃣ Якщо користувач у режимі коментаря
+    # 2️⃣ Режим коментаря
     if user_data.get(uid, {}).get("user_comment_mode"):
-        if text == "⬅️ Вийти з режиму коментаря":
-            user_data[uid]["user_comment_mode"] = False
-            user_data[uid]["comment_task_id"] = None
-            await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
-        elif text == "Перевірити статус задачі":
-            await check_status(update, context)
-        elif text == "🧾 Мої заявки":
-            await mytickets_handler(update, context)
-        elif text == "ℹ️ Допомога":
-            await start(update, context)
+        # Команди, які НЕ є коментарями
+        SERVICE_COMMANDS = {
+            "⬅️ Вийти з режиму коментаря",
+            "Перевірити статус задачі",
+            "🧾 Мої заявки",
+            "ℹ️ Допомога",
+            "🆕 Створити заявку",
+        }
+
+        if text in SERVICE_COMMANDS:
+            if text == "⬅️ Вийти з режиму коментаря":
+                user_data[uid]["user_comment_mode"] = False
+                user_data[uid]["comment_task_id"] = None
+                await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+            elif text == "Перевірити статус задачі":
+                await check_status(update, context)
+            elif text == "🧾 Мої заявки":
+                await mytickets_handler(update, context)
+            elif text == "🆕 Створити заявку":
+                user_data[uid] = {"step": 0}
+                txt, markup = make_keyboard(0)
+                await update.message.reply_text(txt, reply_markup=markup)
+            elif text in ("/start", "ℹ️ Допомога"):
+                await start(update, context)
         else:
             await add_comment_handler(update, context)
         return
 
-    # 3️⃣ Команди та кнопки
+    # 3️⃣ Стандартні кнопки
     if text in ("/start", "ℹ️ Допомога"):
         await start(update, context)
     elif text == "🧾 Мої заявки":
