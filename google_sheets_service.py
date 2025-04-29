@@ -7,12 +7,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 
-# Завантажити змінні середовища
+# Завантаження змінних оточення
 load_dotenv()
-
-# Змінні з оточення
-GOOGLE_CREDENTIALS_PATH = os.getenv("GOOGLE_CREDENTIALS_PATH")
-GOOGLE_SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME", "euromix_tickets")  # за замовченням назва таблиці
 
 def connect_to_sheet():
     """Підключення до Google Sheets."""
@@ -20,9 +16,12 @@ def connect_to_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_CREDENTIALS_PATH, scope)
+    credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+    sheet_name = os.getenv("GOOGLE_SHEET_NAME", "euromix_tickets")
+
+    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
     client = gspread.authorize(creds)
-    sheet = client.open(GOOGLE_SHEET_NAME).sheet1
+    sheet = client.open(sheet_name).sheet1
     return sheet
 
 def add_ticket(ticket_id, telegram_user_id, telegram_chat_id, status="Open"):
