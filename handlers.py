@@ -220,6 +220,12 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data[uid]["user_comment_mode"] = False
             user_data[uid]["comment_task_id"] = None
             await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+        elif text == "Перевірити статус задачі":
+            await check_status(update, context)
+        elif text == "🧾 Мої заявки":
+            await mytickets_handler(update, context)
+        elif text == "ℹ️ Допомога":
+            await start(update, context)
         else:
             await add_comment_handler(update, context)
         return
@@ -237,9 +243,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await check_status(update, context)
     elif text == "📝 Додати коментар до задачі":
         await choose_task_for_comment(update, context)
-    elif text == "⬅️ Вийти з режиму коментаря":
-        user_data[uid]["user_comment_mode"] = False
-        user_data[uid]["comment_task_id"] = None
-        await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+    elif user_data.get(uid, {}).get("task_id"):
+        await add_comment_handler(update, context)
     else:
         await handle_message(update, context)
