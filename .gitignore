@@ -14,3 +14,6 @@ certs/
 backups/
 full_backup.sh
 handlers.py.bak
+
+google-key/
+*.json
