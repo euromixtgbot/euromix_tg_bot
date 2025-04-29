@@ -71,3 +71,9 @@ mytickets_action_markup = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
+
+# Меню для режиму коментаря
+comment_mode_markup = ReplyKeyboardMarkup(
+    [[KeyboardButton("⬅️ Вийти з режиму коментаря")]],
+    resize_keyboard=True
+)

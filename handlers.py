@@ -16,6 +16,7 @@ from services import (
     get_issue_status
 )
 from google_sheets_service import add_ticket
+from keyboards import comment_mode_markup  # Додано до імпортів
 
 user_data: dict[int, dict] = {}
 
@@ -74,12 +75,10 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
         user_data[uid]["user_comment_mode"] = True
         user_data[uid]["comment_task_id"] = task_id
 
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Вийти з режиму коментаря", callback_data="exit_comment_mode")]
-        ])
+        # Використання звичайної клавіатури замість інлайн-кнопки
         await query.message.reply_text(
             f"✍️ Напишіть повідомлення — воно буде додано як коментар до {task_id}",
-            reply_markup=markup
+            reply_markup=comment_mode_markup
         )
 
     elif query.data == "exit_comment_mode":
