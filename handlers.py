@@ -199,24 +199,22 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text or ""
 
-    # Якщо є файл
+    # 1️⃣ Якщо медіа — передаємо у відповідну обробку
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
         return
 
-    # Вийти з режиму коментаря (має найвищий пріоритет)
-    if text == "⬅️ Вийти з режиму коментаря":
-        user_data[uid]["user_comment_mode"] = False
-        user_data[uid]["comment_task_id"] = None
-        await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
-        return
-
-    # Пріоритет: режим коментаря
+    # 2️⃣ Якщо користувач у режимі коментаря
     if user_data.get(uid, {}).get("user_comment_mode"):
-        await add_comment_handler(update, context)
+        if text == "⬅️ Вийти з режиму коментаря":
+            user_data[uid]["user_comment_mode"] = False
+            user_data[uid]["comment_task_id"] = None
+            await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+        else:
+            await add_comment_handler(update, context)
         return
 
-    # Інші варіанти кнопок
+    # 3️⃣ Стандартні дії за текстовими командами
     if text in ("/start", "ℹ️ Допомога"):
         await start(update, context)
     elif text == "🧾 Мої заявки":
