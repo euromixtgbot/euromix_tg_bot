@@ -7,7 +7,8 @@ from telegram.ext import ContextTypes
 from google_sheets_service import get_user_tickets
 from keyboards import (
     make_keyboard, remove_keyboard, STEPS,
-    main_menu_markup, after_create_menu_markup, mytickets_action_markup, comment_mode_markup
+    main_menu_markup, after_create_menu_markup, mytickets_action_markup,
+    comment_mode_markup, BUTTONS
 )
 from services import (
     create_jira_issue,
@@ -18,26 +19,6 @@ from services import (
 from google_sheets_service import add_ticket
 
 user_data: dict[int, dict] = {}
-
-# Константи для службових кнопок
-BUTTON_START = "START"
-BUTTON_HELP = "HELP"
-BUTTON_MY_TICKETS = "MY_TICKETS"
-BUTTON_NEW_TICKET = "NEW_TICKET"
-BUTTON_CHECK_STATUS = "CHECK_STATUS"
-BUTTON_ADD_COMMENT = "ADD_COMMENT"
-BUTTON_EXIT_COMMENT = "EXIT_COMMENT"
-
-# Відображення тексту для кнопок у Telegram
-BUTTON_LABELS = {
-    BUTTON_START: "🆕 Створити заявку",
-    BUTTON_HELP: "ℹ️ Допомога",
-    BUTTON_MY_TICKETS: "🧾 Мої заявки",
-    BUTTON_NEW_TICKET: "🆕 Створити заявку",
-    BUTTON_CHECK_STATUS: "✅ Перевірити статус задачі",
-    BUTTON_ADD_COMMENT: "📝 Додати коментар до задачі",
-    BUTTON_EXIT_COMMENT: "⬅️ Вийти з режиму коментаря"
-}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -59,7 +40,6 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     msg = "🧾 Ваші останні заявки:\n\n" + "\n".join(lines)
     await update.message.reply_text(msg, reply_markup=mytickets_action_markup)
-
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tickets = get_user_tickets(uid)
@@ -148,42 +128,6 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Статус {tid}: {st}")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
-
-async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if uid not in user_data or "task_id" not in user_data[uid]:
-        await update.message.reply_text("❗ Спочатку створіть задачу, а потім надсилайте файли.")
-        return
-
-    tid = user_data[uid]["task_id"]
-    file_obj = None
-    filename = None
-
-    if update.message.document:
-        file_obj = update.message.document
-        filename = file_obj.file_name
-    elif update.message.photo:
-        file_obj = update.message.photo[-1]
-        filename = f"photo_{datetime.now().strftime('%H%M%S')}.jpg"
-    elif update.message.video:
-        file_obj = update.message.video
-        filename = file_obj.file_name or f"video_{file_obj.file_id}.mp4"
-    elif update.message.audio:
-        file_obj = update.message.audio
-        filename = file_obj.file_name or f"audio_{file_obj.file_id}.mp3"
-    else:
-        await update.message.reply_text("⚠️ Непідтримуваний тип файлу.")
-        return
-
-    f = await context.bot.get_file(file_obj.file_id)
-    content = await f.download_as_bytearray()
-    resp = await attach_file_to_jira(tid, filename, content)
-
-    if resp.status_code in (200, 201):
-        await update.message.reply_text(f"✅ '{filename}' прикріплено")
-    else:
-        await update.message.reply_text(f"⛔ Помилка при надсиланні файлу: {resp.status_code}")
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text
@@ -194,7 +138,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = user_data[uid].get("step", 0)
     key = STEPS[step]
 
-    if text == "Назад":
+    if text == BUTTON_LABELS["back"]:
         user_data[uid]["step"] = max(0, step - 1)
         key_to_clear = STEPS[user_data[uid]["step"]]
         user_data[uid][key_to_clear] = ""
@@ -208,7 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[uid].setdefault("description", "")
         user_data[uid]["description"] += text + "\n"
     elif key == "confirm":
-        if text == "Створити задачу":
+        if text == BUTTON_LABELS["confirm_create"]:
             await send_to_jira(update, context)
             return
         else:
@@ -221,54 +165,3 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[uid]["step"] = min(len(STEPS) - 1, step + 1)
     txt, mkp = make_keyboard(user_data[uid]["step"], user_data[uid].get("description", ""))
     await update.message.reply_text(txt, reply_markup=mkp)
-async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    text = update.message.text or ""
-
-    # Якщо це медіа — одразу передаємо у відповідну обробку
-    if update.message.document or update.message.photo or update.message.video or update.message.audio:
-        await handle_media(update, context)
-        return
-
-    # Режим коментаря — обробка службових кнопок та коментарів
-    if user_data.get(uid, {}).get("user_comment_mode"):
-        SERVICE_COMMANDS = {
-            "⬅️ Вийти з режиму коментаря": lambda: exit_comment_mode(update, uid),
-            "✅ Перевірити статус задачі": lambda: check_status(update, context),
-            "🧾 Мої заявки": lambda: mytickets_handler(update, context),
-            "🧾 Мої задачі": lambda: mytickets_handler(update, context),
-            "ℹ️ Допомога": lambda: start(update, context),
-            "/start": lambda: start(update, context)
-        }
-
-        if text in SERVICE_COMMANDS:
-            await SERVICE_COMMANDS[text]()
-        else:
-            await add_comment_handler(update, context)
-        return
-
-    # Звичайний режим — основна логіка
-    if text in ("/start", "ℹ️ Допомога"):
-        await start(update, context)
-    elif text in ("🧾 Мої заявки", "🧾 Мої задачі"):
-        await mytickets_handler(update, context)
-    elif text == "🆕 Створити заявку":
-        user_data[uid] = {"step": 0}
-        txt, markup = make_keyboard(0)
-        await update.message.reply_text(txt, reply_markup=markup)
-    elif text == "✅ Перевірити статус задачі":
-        await check_status(update, context)
-    elif text == "📝 Додати коментар до задачі":
-        await choose_task_for_comment(update, context)
-    elif user_data.get(uid, {}).get("task_id"):
-        await add_comment_handler(update, context)
-    else:
-        await handle_message(update, context)
-
-async def exit_comment_mode(update: Update, uid: int):
-    user_data[uid]["user_comment_mode"] = False
-    user_data[uid]["comment_task_id"] = None
-    await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
-
-
-#
