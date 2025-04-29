@@ -218,7 +218,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_data.get(uid, {}).get("user_comment_mode"):
         SERVICE_COMMANDS = {
             "⬅️ Вийти з режиму коментаря": lambda: exit_comment_mode(update, uid),
-            "Перевірити статус задачі": lambda: check_status(update, context),
+            "✅Перевірити статус задачі": lambda: check_status(update, context),
             "🧾 Мої заявки": lambda: mytickets_handler(update, context),
             "🧾 Мої задачі": lambda: mytickets_handler(update, context),
             "ℹ️ Допомога": lambda: start(update, context),
@@ -240,7 +240,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[uid] = {"step": 0}
         txt, markup = make_keyboard(0)
         await update.message.reply_text(txt, reply_markup=markup)
-    elif text == "Перевірити статус задачі":
+    elif text == "✅Перевірити статус задачі":
         await check_status(update, context)
     elif text == "📝 Додати коментар до задачі":
         await choose_task_for_comment(update, context)
