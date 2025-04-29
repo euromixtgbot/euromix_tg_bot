@@ -20,13 +20,25 @@ OPTIONS = {
     ]
 }
 
+# Системні ключі => текст кнопок
+BUTTONS = {
+    "my_tickets": "🧾 Мої заявки",
+    "create_ticket": "🆕 Створити заявку",
+    "help": "ℹ️ Допомога",
+    "check_status": "✅ Перевірити статус задачі",
+    "add_comment": "📝 Додати коментар до задачі",
+    "exit_comment": "⬅️ Вийти з режиму коментаря",
+    "back": "Назад",
+    "confirm_create": "Створити задачу",
+}
+
 def make_keyboard(step: int, description: str = ""):
     name = STEPS[step]
     if name == "confirm":
-        buttons = [[KeyboardButton("Створити задачу")]]
+        buttons = [[KeyboardButton(BUTTONS["confirm_create"])]]
     else:
         buttons = [[KeyboardButton(opt)] for opt in OPTIONS.get(name, [])]
-    buttons.append([KeyboardButton("Назад")])
+    buttons.append([KeyboardButton(BUTTONS["back"])])
     markup = ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
     texts = {
@@ -35,45 +47,42 @@ def make_keyboard(step: int, description: str = ""):
         "service": "Оберіть Сервіс:",
         "full_name": "Введіть ваше Прізвище та Ім'я:",
         "description": "Опишіть вашу проблему:",
-        "confirm": f"Натисніть 'Створити задачу', якщо все заповнено.\n\nОпис задачі:\n{description}"
+        "confirm": f"Натисніть '{BUTTONS['confirm_create']}', якщо все заповнено.\n\nОпис задачі:\n{description}"
     }
     return texts[name], markup
 
 def remove_keyboard():
     return ReplyKeyboardRemove()
 
-# Головне меню після /start
 main_menu_markup = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("🧾 Мої заявки")],
-        [KeyboardButton("🆕 Створити заявку")],
-        [KeyboardButton("ℹ️ Допомога")]
+        [KeyboardButton(BUTTONS["my_tickets"])],
+        [KeyboardButton(BUTTONS["create_ticket"])],
+        [KeyboardButton(BUTTONS["help"])]
     ],
     resize_keyboard=True
 )
 
-# Меню після створення задачі
 after_create_menu_markup = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("🧾 Мої задачі")],
-        [KeyboardButton("✅ Перевірити статус задачі")],
-        [KeyboardButton("ℹ️ Допомога")]
+        [KeyboardButton(BUTTONS["my_tickets"])],
+        [KeyboardButton(BUTTONS["check_status"])],
+        [KeyboardButton(BUTTONS["help"])]
     ],
     resize_keyboard=True
 )
 
-# Меню під час перегляду задач (наприклад, після /mytickets)
 mytickets_action_markup = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📝 Додати коментар до задачі")],
-        [KeyboardButton("🆕 Створити заявку")],
-        [KeyboardButton("ℹ️ Допомога")]
+        [KeyboardButton(BUTTONS["add_comment"])],
+        [KeyboardButton(BUTTONS["create_ticket"])],
+        [KeyboardButton(BUTTONS["help"])]
     ],
     resize_keyboard=True
 )
 
-# Меню для режиму коментаря
 comment_mode_markup = ReplyKeyboardMarkup(
-    [[KeyboardButton("⬅️ Вийти з режиму коментаря")]],
+    [[KeyboardButton(BUTTONS["exit_comment"])]],
     resize_keyboard=True
 )
+
