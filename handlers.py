@@ -8,6 +8,7 @@ from services import (
     add_comment_to_jira,
     get_issue_status
 )
+from google_sheets_service import add_ticket  # <--- додаємо імпорт
 
 user_data: dict[int, dict] = {}
 
@@ -62,6 +63,17 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if code == 201:
         issue_key = result["json"]["key"]
         user_data[uid]["task_id"] = issue_key
+
+        # Додаємо заявку в Google Таблицю
+        try:
+            add_ticket(
+                ticket_id=issue_key,
+                telegram_user_id=update.effective_user.id,
+                telegram_chat_id=update.effective_chat.id
+            )
+        except Exception as e:
+            print(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
+
         # перша відповідь
         await update.message.reply_text(f"✅ Задача створена: {issue_key}", reply_markup=remove_keyboard())
         # кнопка статусу
@@ -87,12 +99,10 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_obj = None
     filename = None
 
-    # будь-який тип media/document/photo/video/audio
     if update.message.document:
         file_obj = update.message.document
         filename = file_obj.file_name
     elif update.message.photo:
-        # останній (найбільший) розмір
         file_obj = update.message.photo[-1]
         filename = f"photo_{datetime.now().strftime('%H%M%S')}.jpg"
     elif update.message.video:
@@ -105,7 +115,6 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Непідтримуваний тип файлу.")
         return
 
-    # завантажити bytes
     f = await context.bot.get_file(file_obj.file_id)
     content = await f.download_as_bytearray()
     resp = await attach_file_to_jira(tid, filename, content)
