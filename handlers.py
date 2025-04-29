@@ -82,6 +82,11 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if code == 201:
         issue_key = result["json"]["key"]
         user_data[uid]["task_id"] = issue_key
+
+        # 🔽 Активуємо режим коментаря до нової задачі
+        user_data[uid]["user_comment_mode"] = True
+        user_data[uid]["comment_task_id"] = issue_key
+
         try:
             add_ticket(
                 ticket_id=issue_key,
@@ -91,10 +96,15 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             print(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
-        await update.message.reply_text(f"✅ Задача створена: {issue_key}", reply_markup=after_create_menu_markup)
+
+        await update.message.reply_text(
+            f"✅ Задача створена: {issue_key}",
+            reply_markup=after_create_menu_markup
+        )
     else:
         err = result["json"].get("errorMessages") or result["json"]
         await update.message.reply_text(f"❌ Помилка створення задачі: {code}: {err}")
+
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if user_data.get(uid, {}).get("user_comment_mode"):
@@ -214,7 +224,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await add_comment_handler(update, context)
         return
 
-    # 3️⃣ Стандартні дії за текстовими командами
+    # 3️⃣ Команди та кнопки
     if text in ("/start", "ℹ️ Допомога"):
         await start(update, context)
     elif text == "🧾 Мої заявки":
@@ -227,7 +237,9 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await check_status(update, context)
     elif text == "📝 Додати коментар до задачі":
         await choose_task_for_comment(update, context)
-    elif user_data.get(uid, {}).get("task_id"):
-        await add_comment_handler(update, context)
+    elif text == "⬅️ Вийти з режиму коментаря":
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
+        await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
     else:
         await handle_message(update, context)
