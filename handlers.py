@@ -138,7 +138,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = user_data[uid].get("step", 0)
     key = STEPS[step]
 
-    if text == BUTTON_LABELS["back"]:
+    if text == BUTTONS["back"]:
         user_data[uid]["step"] = max(0, step - 1)
         key_to_clear = STEPS[user_data[uid]["step"]]
         user_data[uid][key_to_clear] = ""
@@ -165,3 +165,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[uid]["step"] = min(len(STEPS) - 1, step + 1)
     txt, mkp = make_keyboard(user_data[uid]["step"], user_data[uid].get("description", ""))
     await update.message.reply_text(txt, reply_markup=mkp)
+async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    text = update.message.text or ""
+
+    # 1️⃣ Якщо медіа — передаємо в handle_media
+    if update.message.document or update.message.photo or update.message.video or update.message.audio:
+        await handle_media(update, context)
+        return
+
+    # 2️⃣ Якщо активний режим коментаря — перевірка службових кнопок
+    if user_data.get(uid, {}).get("user_comment_mode"):
+        if text == BUTTONS["exit_comment"]:
+            await exit_comment_mode(update, uid)
+        elif text in (BUTTONS["check_status"], BUTTONS["my_tickets"], BUTTONS["my_tasks"], BUTTONS["help"], "/start"):
+            await {
+                BUTTONS["check_status"]: check_status,
+                BUTTONS["my_tickets"]: mytickets_handler,
+                BUTTONS["my_tasks"]: mytickets_handler,
+                BUTTONS["help"]: start,
+                "/start": start
+            }[text](update, context)
+        else:
+            await add_comment_handler(update, context)
+        return
+
+    # 3️⃣ Стандартна логіка
+    if text in ("/start", BUTTONS["help"]):
+        await start(update, context)
+    elif text in (BUTTONS["my_tickets"], BUTTONS["my_tasks"]):
+        await mytickets_handler(update, context)
+    elif text == BUTTONS["create_ticket"]:
+        user_data[uid] = {"step": 0}
+        txt, markup = make_keyboard(0)
+        await update.message.reply_text(txt, reply_markup=markup)
+    elif text == BUTTONS["check_status"]:
+        await check_status(update, context)
+    elif text == BUTTONS["add_comment"]:
+        await choose_task_for_comment(update, context)
+    elif user_data.get(uid, {}).get("task_id"):
+        await add_comment_handler(update, context)
+    else:
+        await handle_message(update, context)
+
+async def exit_comment_mode(update: Update, uid: int):
+    user_data[uid]["user_comment_mode"] = False
+    user_data[uid]["comment_task_id"] = None
+    await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
