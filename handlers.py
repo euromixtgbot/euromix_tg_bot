@@ -152,7 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[uid].setdefault("description", "")
         user_data[uid]["description"] += text + "\n"
     elif key == "confirm":
-        if text == BUTTON_LABELS["confirm_create"]:
+        if text == BUTTONS["confirm_create"]:
             await send_to_jira(update, context)
             return
         else:
