@@ -58,17 +58,31 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tickets = get_user_tickets(uid)
+
     if not tickets:
-        await update.message.reply_text("У вас немає активних задач.")
+        await update.message.reply_text("❗️ У вас немає заявок для коментаря.", reply_markup=None)
         return
 
-    buttons = [
-        [InlineKeyboardButton(f"{t.get('Ticket_ID')} ({t.get('Status', 'Невідомо')})", callback_data=f"comment_task_{t.get('Ticket_ID')}")]
-        for t in tickets[:10]
-    ]
-    markup = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text("Оберіть задачу для коментаря:", reply_markup=markup)
+    # Відсортувати за датою і взяти останні 10
+    sorted_tickets = sorted(
+        tickets,
+        key=lambda t: t.get("Created_At", ""),
+        reverse=True
+    )[:10]
 
+    buttons = []
+    for t in sorted_tickets:
+        issue_id = t.get("Ticket_ID", "N/A")
+        # Отримуємо статус з Jira
+        try:
+            status = await get_issue_status(issue_id)
+        except Exception:
+            status = "❓ помилка"
+        label = f"{issue_id} — {status}"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"comment:{issue_id}")])
+
+    markup = InlineKeyboardMarkup(buttons)
+    await update.message.reply_text("🖋️ Оберіть задачу:", reply_markup=markup)
 async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query: CallbackQuery = update.callback_query
     await query.answer()
