@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 from config import TOKEN
 import handlers
 
+# Завантаження змінних оточення
 load_dotenv()
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -29,10 +31,12 @@ async def error_handler(update, context):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # старт
-    app.add_handler(CommandHandler("start", handlers.start))
+    # --- 0) /start ---
+    app.add_handler(
+        CommandHandler("start", handlers.start)
+    )
 
-    # 1) callback на inline-кнопки «comment_task_...»
+    # --- 1) Callback для inline-кнопок коментаря ---
     app.add_handler(
         CallbackQueryHandler(
             handlers.handle_comment_callback,
@@ -40,7 +44,7 @@ def main():
         )
     )
 
-    # 2) текст в режимі коментаря
+    # --- 2) Текст у режимі коментаря (група 0) ---
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -49,7 +53,7 @@ def main():
         group=0
     )
 
-    # 3) універсальні хендлери після comment_text_handler
+    # --- 3) Універсальний хендлер для медіа (група 1) ---
     app.add_handler(
         MessageHandler(
             filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO,
@@ -57,6 +61,7 @@ def main():
         ),
         group=1
     )
+    # --- 4) Універсальний хендлер для тексту (група 1) ---
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -65,8 +70,10 @@ def main():
         group=1
     )
 
-    # помилки
+    # --- 5) Обробник помилок ---
     app.add_error_handler(error_handler)
+
+    # Старт polling
     app.run_polling()
 
 if __name__ == "__main__":
