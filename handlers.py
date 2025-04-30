@@ -33,19 +33,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tickets = get_user_tickets(uid)
-
     if not tickets:
         await update.message.reply_text("❗️ У вас немає створених заявок.")
         return
 
-    # Відсортувати за Created_At (найсвіжіші зверху) й обмежити до 10
     sorted_tickets = sorted(
         tickets,
         key=lambda t: t.get("Created_At", ""),
         reverse=True
     )[:10]
 
-    # Підготувати список інлайн-кнопок із актуальним статусом із Jira
     buttons = []
     for t in sorted_tickets:
         issue_id = t.get("Ticket_ID", "N/A")
@@ -54,13 +51,12 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             status = "❓ помилка"
         label = f"{issue_id} — {status}"
-        # Використовуємо префікс comment_task_ для коректного хендлингу
+        # callback_data з префіксом comment_task_
         buttons.append([InlineKeyboardButton(label, callback_data=f"comment_task_{issue_id}")])
 
-    markup = InlineKeyboardMarkup(buttons)
     await update.message.reply_text(
         "🖋️ Оберіть задачу для коментаря:",
-        reply_markup=markup
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,30 +90,65 @@ async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=markup
     )
 
+# 1) обробляє клік на інлайн-кнопку «comment_task_<ID>»
 async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query: CallbackQuery = update.callback_query
-    # 1) Підтверджуємо отримання callback (щоб прибрати «годинник»)
-    await query.answer()
-    # 2) Прибираємо інлайн-клавіатуру відразу
-    await query.message.edit_reply_markup(reply_markup=None)
+    await query.answer()  # прибираємо «годинник»
+    await query.message.edit_reply_markup(reply_markup=None)  # ховаємо кнопки
 
     uid = query.from_user.id
+    task_id = query.data.replace("comment_task_", "", 1)
 
-    if query.data.startswith("comment_task_"):
-        # Вирізаємо ідентифікатор задачі з callback_data
-        task_id = query.data.replace("comment_task_", "", 1)
+    # вмикаємо режим коментаря
+    user_data.setdefault(uid, {})
+    user_data[uid]["user_comment_mode"] = True
+    user_data[uid]["comment_task_id"] = task_id
 
-        # Ініціалізуємо/оновлюємо стан користувача
-        user_data.setdefault(uid, {})
-        user_data[uid]["user_comment_mode"] = True
-        user_data[uid]["comment_task_id"] = task_id
+    # промпт із клавіатурою виходу
+    await query.message.reply_text(
+        f"✍️ Ви пишете коментар до {task_id}.\nНадішліть текст або натисніть ❌ для виходу.",
+        reply_markup=comment_mode_markup
+    )
+# 2) обробляє текст у режимі коментаря (і кнопку EXIT)
+async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not user_data.get(uid, {}).get("user_comment_mode"):
+        # якщо не в режимі — пропускаємо
+        return
 
-        # Відправляємо промпт із клавіатурою для виходу з режиму
-        await query.message.reply_text(
-            f"✍️ Напишіть повідомлення — воно буде додано як коментар до {task_id}",
-            reply_markup=comment_mode_markup
+    text = update.message.text
+    # EXIT з режиму
+    if text == BUTTONS["exit_comment"]:
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
+        await update.message.reply_text(
+            "🔙 Ви вийшли з режиму коментаря.",
+            reply_markup=main_menu_markup
         )
+        return
 
+    # реальний коментар
+    task_id = user_data[uid].get("comment_task_id")
+    if not task_id:
+        # зайвий захід — просто повернутися
+        user_data[uid]["user_comment_mode"] = False
+        return
+
+    resp = await add_comment_to_jira(task_id, text)
+    # після спроби — вимикаємо режим
+    user_data[uid]["user_comment_mode"] = False
+    user_data[uid]["comment_task_id"] = None
+
+    if resp.status_code == 201:
+        await update.message.reply_text(
+            f"✅ Коментар додано до задачі {task_id}",
+            reply_markup=main_menu_markup
+        )
+    else:
+        await update.message.reply_text(
+            f"⛔ Помилка додавання коментаря: {resp.status_code}",
+            reply_markup=main_menu_markup
+        )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     desc = user_data[uid].get("description", "").strip()
@@ -201,7 +232,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if not tid:
         await update.message.reply_text(
-            "❗ У вас немає активної задачі для коментаря."
+            #  "❗ У вас немає активної задачі для коментаря."
         )
         return
 
