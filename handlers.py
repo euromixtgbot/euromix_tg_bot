@@ -33,28 +33,29 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗️ У вас немає створених заявок.")
         return
 
-    # Відсортувати за датою створення (найсвіжіші зверху) і взяти останні 10
+    # Відсортувати за Created_At (найсвіжіші зверху) й обмежити до 10
     sorted_tickets = sorted(
         tickets,
         key=lambda t: t.get("Created_At", ""),
         reverse=True
     )[:10]
 
-    lines = []
+    # Підготувати список інлайн-кнопок із актуальним статусом із Jira
+    buttons = []
     for t in sorted_tickets:
         issue_id = t.get("Ticket_ID", "N/A")
-        created = t.get("Created_At", "")
-
-        # Отримати актуальний статус з Jira
         try:
             status = await get_issue_status(issue_id)
         except Exception:
-            status = "❓ помилка отримання статусу"
+            status = "❓ помилка"
+        label = f"{issue_id} — {status}"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"comment:{issue_id}")])
 
-        lines.append(f"📌 {issue_id} — {status} ({created})")
-
-    msg = "🧾 Ваші останні заявки:\n\n" + "\n".join(lines)
-    await update.message.reply_text(msg, reply_markup=mytickets_action_markup)
+    markup = InlineKeyboardMarkup(buttons)
+    await update.message.reply_text(
+        "🖋️ Оберіть задачу для коментаря:",
+        reply_markup=markup
+    )
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     tickets = get_user_tickets(uid)
@@ -82,7 +83,7 @@ async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_
         buttons.append([InlineKeyboardButton(label, callback_data=f"comment:{issue_id}")])
 
     markup = InlineKeyboardMarkup(buttons)
-    await update.message.reply_text("🖋️ Оберіть задачу:", reply_markup=markup)
+    await update.message.reply_text("🖋️ Натисніть на задачу щоб переглянути детальніше і додати коментар:", reply_markup=markup)
 async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query: CallbackQuery = update.callback_query
     await query.answer()
