@@ -33,11 +33,26 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗️ У вас немає створених заявок.")
         return
 
-    sorted_tickets = sorted(tickets, key=lambda t: t.get("Created_At", ""), reverse=True)[:10]
-    lines = [
-        f"📌 {t.get('Ticket_ID', 'N/A')} — {t.get('Status', 'Невідомо')} ({t.get('Created_At', '')})"
-        for t in sorted_tickets
-    ]
+    # Відсортувати за датою створення (найсвіжіші зверху) і взяти останні 10
+    sorted_tickets = sorted(
+        tickets,
+        key=lambda t: t.get("Created_At", ""),
+        reverse=True
+    )[:10]
+
+    lines = []
+    for t in sorted_tickets:
+        issue_id = t.get("Ticket_ID", "N/A")
+        created = t.get("Created_At", "")
+
+        # Отримати актуальний статус з Jira
+        try:
+            status = get_issue_status(issue_id)
+        except Exception as e:
+            status = f"❓ помилка"
+
+        lines.append(f"📌 {issue_id} — {status} ({created})")
+
     msg = "🧾 Ваші останні заявки:\n\n" + "\n".join(lines)
     await update.message.reply_text(msg, reply_markup=mytickets_action_markup)
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
