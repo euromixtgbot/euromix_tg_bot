@@ -99,6 +99,44 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         err = result["json"].get("errorMessages") or result["json"]
         await update.message.reply_text(f"❌ Помилка створення задачі: {code}: {err}")
+
+async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid not in user_data or "task_id" not in user_data[uid]:
+        await update.message.reply_text("❗ Спочатку натисніть 'Створити задачу', а потім надсилайте файли.")
+        return
+
+    tid = user_data[uid]["task_id"]
+    file_obj = None
+    filename = None
+
+    # будь-який тип media/document/photo/video/audio
+    if update.message.document:
+        file_obj = update.message.document
+        filename = file_obj.file_name
+    elif update.message.photo:
+        # останній (найбільший) розмір
+        file_obj = update.message.photo[-1]
+        filename = f"photo_{datetime.now().strftime('%H%M%S')}.jpg"
+    elif update.message.video:
+        file_obj = update.message.video
+        filename = file_obj.file_name or f"video_{file_obj.file_id}.mp4"
+    elif update.message.audio:
+        file_obj = update.message.audio
+        filename = file_obj.file_name or f"audio_{file_obj.file_id}.mp3"
+    else:
+        await update.message.reply_text("⚠️ Непідтримуваний тип файлу.")
+        return
+
+    # завантажити bytes
+    f = await context.bot.get_file(file_obj.file_id)
+    content = await f.download_as_bytearray()
+    resp = await attach_file_to_jira(tid, filename, content)
+    if resp.status_code in (200,201):
+        await update.message.reply_text(f"✅ '{filename}' прикріплено")
+    else:
+        await update.message.reply_text(f"⛔ Помилка при надсиланні файлу: {resp.status_code}")
+
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if user_data.get(uid, {}).get("user_comment_mode"):
