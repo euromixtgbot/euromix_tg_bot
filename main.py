@@ -31,12 +31,12 @@ async def error_handler(update, context):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # --- 0) /start ---
+    # 0) Стартова команда
     app.add_handler(
         CommandHandler("start", handlers.start)
     )
 
-    # --- 1) Callback для inline-кнопок коментаря ---
+    # 1) Обробка кліку на інлайн-кнопки comment_task_<ID>
     app.add_handler(
         CallbackQueryHandler(
             handlers.handle_comment_callback,
@@ -44,36 +44,20 @@ def main():
         )
     )
 
-    # --- 2) Текст у режимі коментаря (група 0) ---
+    # 2) Універсальний хендлер: обробляє і текст, і медіа.
+    #    Всередині він розбиратиметься, чи ми в режимі коментаря, чи ні.
     app.add_handler(
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handlers.comment_text_handler
-        ),
-        group=0
+            filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO |
+            (filters.TEXT & ~filters.COMMAND),
+            handlers.universal_handler
+        )
     )
 
-    # --- 3) Універсальний хендлер для медіа (група 1) ---
-    app.add_handler(
-        MessageHandler(
-            filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO,
-            handlers.universal_handler
-        ),
-        group=1
-    )
-    # --- 4) Універсальний хендлер для тексту (група 1) ---
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handlers.universal_handler
-        ),
-        group=1
-    )
-
-    # --- 5) Обробник помилок ---
+    # 3) Обробник помилок
     app.add_error_handler(error_handler)
 
-    # Старт polling
+    # Запускаємо polling
     app.run_polling()
 
 if __name__ == "__main__":
