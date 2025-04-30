@@ -45,10 +45,13 @@ def main():
     )
 
     # 2) Універсальний хендлер: обробляє і текст, і медіа.
-    #    Всередині він розбиратиметься, чи ми в режимі коментаря, чи ні.
+    #    Сам він вирішує — чи в режимі коментаря, чи інша логіка.
     app.add_handler(
         MessageHandler(
-            filters.Document.ALL | filters.PHOTO | filters.VIDEO | filters.AUDIO |
+            filters.Document.ALL |
+            filters.PHOTO |
+            filters.VIDEO |
+            filters.AUDIO |
             (filters.TEXT & ~filters.COMMAND),
             handlers.universal_handler
         )
