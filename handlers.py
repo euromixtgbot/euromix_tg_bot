@@ -47,9 +47,9 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Отримати актуальний статус з Jira
         try:
-            status = get_issue_status(issue_id)
-        except Exception as e:
-            status = f"❓ помилка"
+            status = await get_issue_status(issue_id)
+        except Exception:
+            status = "❓ помилка отримання статусу"
 
         lines.append(f"📌 {issue_id} — {status} ({created})")
 
