@@ -16,24 +16,33 @@ logger = logging.getLogger(__name__)
 
 def connect_to_sheet():
     """
-    Підключення до Google Sheets.
-    Повертає `Sheet` або None, якщо не вдалося відкрити книгу.
+    Підключення до Google Sheets по ID або за назвою.
+    Повертає об’єкт Sheet або None у разі помилки.
     """
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    credentials_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+    creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
+    sheet_id = os.getenv("GOOGLE_SHEET_ID")
     sheet_name = os.getenv("GOOGLE_SHEET_NAME", "euromix_tickets")
 
-    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
     client = gspread.authorize(creds)
+
     try:
-        sheet = client.open(sheet_name).sheet1
+        if sheet_id:
+            sheet = client.open_by_key(sheet_id).sheet1
+        else:
+            sheet = client.open(sheet_name).sheet1
         return sheet
+
     except SpreadsheetNotFound:
-        logger.error(f"[GoogleSheets] Лист '{sheet_name}' не знайдено. "
-                     "Перевірте GOOGLE_SHEET_NAME у .env")
+        identifier = sheet_id or sheet_name
+        logger.error(
+            f"[GoogleSheets] Лист '{identifier}' не знайдено. "
+            "Перевірте GOOGLE_SHEET_ID/GOOGLE_SHEET_NAME у .env"
+        )
         return None
     except Exception as e:
         logger.error(f"[GoogleSheets] Помилка підключення до Sheets: {e}")
