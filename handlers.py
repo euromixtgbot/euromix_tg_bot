@@ -92,32 +92,39 @@ async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_
 
 # 1) обробляє клік на інлайн-кнопку «comment_task_<ID>»
 async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query: CallbackQuery = update.callback_query
-    await query.answer()  # прибираємо «годинник»
-    await query.message.edit_reply_markup(reply_markup=None)  # ховаємо кнопки
+    """
+    Перехід у режим коментування по натисненню інлайн-кнопки comment_task_<ID>.
+    """
+    query = update.callback_query
+    await query.answer()
+    await query.message.edit_reply_markup(reply_markup=None)
 
     uid = query.from_user.id
     task_id = query.data.replace("comment_task_", "", 1)
 
-    # вмикаємо режим коментаря
     user_data.setdefault(uid, {})
     user_data[uid]["user_comment_mode"] = True
     user_data[uid]["comment_task_id"] = task_id
 
-    # промпт із клавіатурою виходу
+    # Зразу даємо клавіатуру «вийти» і чекаємо текст
     await query.message.reply_text(
         f"✍️ Ви пишете коментар до {task_id}.\nНадішліть текст або натисніть ❌ для виходу.",
         reply_markup=comment_mode_markup
     )
-# 2) обробляє текст у режимі коментаря (і кнопку EXIT)
+
 async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробляє текст у режимі коментування.
+    Якщо text == BUTTONS['exit_comment'] — виходить в головне меню,
+    інакше — відправляє коментар і лишається в режимі.
+    """
     uid = update.effective_user.id
     if not user_data.get(uid, {}).get("user_comment_mode"):
-        # якщо не в режимі — пропускаємо
-        return
+        return  # не в режимі — пропускаємо
 
     text = update.message.text
-    # EXIT з режиму
+
+    # 1) Вихід із режиму
     if text == BUTTONS["exit_comment"]:
         user_data[uid]["user_comment_mode"] = False
         user_data[uid]["comment_task_id"] = None
@@ -127,27 +134,26 @@ async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    # реальний коментар
+    # 2) Власне коментар
     task_id = user_data[uid].get("comment_task_id")
     if not task_id:
-        # зайвий захід — просто повернутися
+        # якщо раптом немає прив’язки — просто виходимо
         user_data[uid]["user_comment_mode"] = False
         return
 
     resp = await add_comment_to_jira(task_id, text)
-    # після спроби — вимикаємо режим
-    user_data[uid]["user_comment_mode"] = False
-    user_data[uid]["comment_task_id"] = None
 
     if resp.status_code == 201:
         await update.message.reply_text(
-            f"✅ Коментар додано до задачі {task_id}",
-            reply_markup=main_menu_markup
+            f"✅ Коментар додано до задачі {task_id}\n\n"
+            "Можете продовжувати писати нові коментарі або натиснути ❌ для виходу.",
+            reply_markup=comment_mode_markup
         )
     else:
         await update.message.reply_text(
-            f"⛔ Помилка додавання коментаря: {resp.status_code}",
-            reply_markup=main_menu_markup
+            f"⛔ Помилка додавання коментаря: {resp.status_code}\n\n"
+            "Спробуйте ще раз або натисніть ❌ для виходу.",
+            reply_markup=comment_mode_markup
         )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
