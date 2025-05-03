@@ -351,8 +351,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    uid = user.id
     text = update.message.text or ""
-    logger.info(f"[UNIVERSAL] User {user.id} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
+    logger.info(f"[UNIVERSAL] User {uid} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
 
     # 1️⃣ Якщо медіа — передаємо в handle_media
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
