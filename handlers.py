@@ -24,11 +24,20 @@ user_data: dict[int, dict] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+
+    # 🛑 Захист від дублювання відповіді на /start
+    if context.user_data.get("started"):
+        return
+    context.user_data["started"] = True
+
+    # Скидаємо стан користувача
     user_data[uid] = {"step": 0}
+
     await update.message.reply_text(
         "👋 Вітаємо! Оберіть дію нижче:",
         reply_markup=main_menu_markup
     )
+
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
