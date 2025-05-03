@@ -1,3 +1,6 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
 # Основні етапи створення заявки
