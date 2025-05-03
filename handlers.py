@@ -25,12 +25,19 @@ user_data: dict[int, dict] = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
-    # 🛑 Захист від дублювання відповіді на /start
+    # 🛑 Якщо вже запускали — показати головне меню знову
     if context.user_data.get("started"):
-        return
-    context.user_data["started"] = True
+        user_data.setdefault(uid, {})
+        user_data[uid]["step"] = 0
 
-    # Скидаємо стан користувача
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="ℹ️ Щоб побачити меню — ось кнопки нижче:",
+            reply_markup=main_menu_markup
+        )
+        return
+
+    context.user_data["started"] = True
     user_data[uid] = {"step": 0}
 
     await context.bot.send_message(
@@ -38,6 +45,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="👋 Вітаємо! Оберіть дію нижче:",
         reply_markup=main_menu_markup
     )
+
+
 
 
 
