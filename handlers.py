@@ -28,16 +28,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
+    user = update.effective_user
+    uid = user.id
 
-    # 🛑 Захист від повторного запуску
     if context.user_data.get("started"):
-        logger.info(f"/start уже був виконаний для uid={uid}")
+        logger.info(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) повторно викликає /start")
         return
     context.user_data["started"] = True
 
     user_data[uid] = {"step": 0}
-    logger.info(f"/start виконано для uid={uid}, message: {update.message.text}")
+    logger.info(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) викликав /start")
 
     try:
         await context.bot.send_message(
@@ -46,13 +46,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu_markup
         )
     except Exception as e:
-        logger.exception(f"🚫 start(): uid={uid}, exception={e}")
+        logger.exception(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) помилка: {e}")
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="⚠️ Помилка при відображенні кнопок. Спробуйте ще раз або напишіть /start."
         )
-
-
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -133,13 +131,16 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=comment_mode_markup
     )
 
-async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обробляє текст у режимі коментування.
     Якщо text == BUTTONS['exit_comment'] — виходить в головне меню,
     інакше — відправляє коментар і лишається в режимі.
     """
-    uid = update.effective_user.id
+    user = update.effective_user
+    uid = user.id
+    logger.info(f"[COMMENT] User {uid} (@{user.username or '-'}, {user.first_name}) додає коментар")
+
     if not user_data.get(uid, {}).get("user_comment_mode"):
         return  # не в режимі — пропускаємо
 
@@ -177,8 +178,9 @@ async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=comment_mode_markup
         )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    logger.info(f"[JIRA] User {uid} створює задачу")
+    user = update.effective_user
+    uid = user.id
+    logger.info(f"[JIRA] User {uid} (@{user.username or '-'}, {user.first_name}) створює задачу")
     desc = user_data[uid].get("description", "").strip()
     summary = desc.split("\n", 1)[0]
     result = await create_jira_issue(summary, desc)
@@ -199,7 +201,7 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 telegram_username=update.effective_user.username
             )
         except Exception as e:
-            print(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
+            logger.error(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
 
         await update.message.reply_text(
             f"✅ Задача створена: {issue_key}",
@@ -210,7 +212,9 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Помилка створення задачі: {code}: {err}")
 
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
+    user = update.effective_user
+    uid = user.id
+    logger.info(f"[MEDIA] User {uid} (@{user.username or '-'}, {user.first_name}) надсилає медіа")
     if uid not in user_data or "task_id" not in user_data[uid]:
         await update.message.reply_text(
             "❗ Спочатку натисніть 'Створити задачу', а потім надсилайте файли."
@@ -250,41 +254,61 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Всередині universal_handler: коли user_comment_mode==True
-    ми ловимо будь-який текст (окрім EXIT) тут і додаємо коментар.
-    Після цього лишаємо режим увімкненим.
-    """
-    uid = update.effective_user.id
-    logger.info(f"[COMMENT] User {uid} додає коментар")
-    tid = user_data[uid].get("comment_task_id")
+    user = update.effective_user
+    uid = user.id
+    logger.info(f"[COMMENT] User {uid} (@{user.username or '-'}, {user.first_name}) додає коментар")
+
+    if not user_data.get(uid, {}).get("user_comment_mode"):
+        return  # не в режимі — пропускаємо
+
     text = update.message.text.strip()
 
-    resp = await add_comment_to_jira(tid, text)
+    # 1) Вихід із режиму
+    if text == BUTTONS["exit_comment"]:
+        user_data[uid]["user_comment_mode"] = False
+        user_data[uid]["comment_task_id"] = None
+        await update.message.reply_text(
+            "🔙 Ви вийшли з режиму коментаря.",
+            reply_markup=main_menu_markup
+        )
+        return
+
+    # 2) Власне коментар
+    task_id = user_data[uid].get("comment_task_id")
+    if not task_id:
+        # якщо раптом немає прив’язки — просто виходимо
+        user_data[uid]["user_comment_mode"] = False
+        return
+
+    resp = await add_comment_to_jira(task_id, text)
+
     if resp.status_code == 201:
         await update.message.reply_text(
-            f"✅ Коментар додано до задачі {tid}.\n"
-            "Можете писати ще коментарі або натиснути ❌ для виходу.",
+            f"✅ Коментар додано до задачі {task_id}\n\n"
+            "Можете продовжувати писати нові коментарі або натиснути 🔙 для виходу.",
             reply_markup=comment_mode_markup
         )
     else:
         await update.message.reply_text(
-            f"⛔ Не вдалося додати коментар: {resp.status_code}\n"
-            "Спробуйте ще раз або натисніть ❌ для виходу.",
+            f"⛔ Помилка додавання коментаря: {resp.status_code}\n\n"
+            "Спробуйте ще раз або натисніть 🔙 для виходу.",
             reply_markup=comment_mode_markup
         )
-    # Не вимикаємо user_comment_mode — чекаємо EXIT
 
 async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
+    user = update.effective_user
+    uid = user.id
     tid = user_data.get(uid, {}).get("task_id")
     if not tid:
         await update.message.reply_text("Немає активної задачі.")
+        logger.info(f"[STATUS] User {uid} (@{user.username or '-'}, {user.first_name}) — немає задачі")
         return
     try:
         st = await get_issue_status(tid)
         await update.message.reply_text(f"Статус {tid}: {st}")
+        logger.info(f"[STATUS] User {uid} (@{user.username or '-'}, {user.first_name}) — статус: {st}")
     except Exception as e:
+        logger.exception(f"[STATUS] User {uid} (@{user.username or '-'}, {user.first_name}) — помилка: {e}")
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -326,9 +350,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(txt, reply_markup=mkp)
 
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    logger.info(f"[UNIVERSAL] User {uid} надіслав повідомлення")
+    user = update.effective_user
     text = update.message.text or ""
+    logger.info(f"[UNIVERSAL] User {user.id} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
 
     # 1️⃣ Якщо медіа — передаємо в handle_media
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
