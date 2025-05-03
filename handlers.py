@@ -24,27 +24,20 @@ user_data: dict[int, dict] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-
-    # 🛑 Якщо вже запускали — показати головне меню знову
-    if context.user_data.get("started"):
-        user_data.setdefault(uid, {})
-        user_data[uid]["step"] = 0
-
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="ℹ️ Щоб побачити меню — ось кнопки нижче:",
-            reply_markup=main_menu_markup
-        )
-        return
-
-    context.user_data["started"] = True
     user_data[uid] = {"step": 0}
 
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="👋 Вітаємо! Оберіть дію нижче:",
-        reply_markup=main_menu_markup
-    )
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="👋 Вітаємо! Оберіть дію нижче:",
+            reply_markup=main_menu_markup
+        )
+    except Exception as e:
+        logger.exception("🚫 Помилка в функції start: %s", e)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="⚠️ Помилка при відображенні кнопок. Спробуйте ще раз або напишіть /start."
+        )
 
 
 
