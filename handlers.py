@@ -33,10 +33,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Скидаємо стан користувача
     user_data[uid] = {"step": 0}
 
-    await update.message.reply_text(
-        "👋 Вітаємо! Оберіть дію нижче:",
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="👋 Вітаємо! Оберіть дію нижче:",
         reply_markup=main_menu_markup
     )
+
 
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
