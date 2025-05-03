@@ -355,6 +355,11 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     logger.info(f"[UNIVERSAL] User {uid} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
 
+    # 0️⃣ Спочатку перевіряємо кнопки, які мають пріоритет
+    if text == BUTTONS["check_status"]:
+        await check_status(update, context)
+        return  # Важливо повернутися, щоб уникнути подальшої обробки
+
     # 1️⃣ Якщо медіа — передаємо в handle_media
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
@@ -363,19 +368,19 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 2️⃣ Режим коментаря
     if user_data.get(uid, {}).get("user_comment_mode"):
         if text == BUTTONS["exit_comment"]:
+            # EXIT: вимикаємо режим і повертаємо головне меню
             user_data[uid]["user_comment_mode"] = False
             user_data[uid]["comment_task_id"] = None
-            await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
+            await update.message.reply_text(
+                "🔙 Ви вийшли з режиму коментаря.",
+                reply_markup=main_menu_markup
+            )
         else:
+            # будь-який інший текст — додаємо коментар
             await add_comment_handler(update, context)
         return
 
-    # 🛠 Виправлення: обробка натискання до перевірки task_id
-    if text == BUTTONS["check_status"]:
-        await check_status(update, context)
-        return
-
-    # 3️⃣ Інші дії
+    # 3️⃣ Стандартна логіка
     if text == BUTTONS["help"]:
         await start(update, context)
     elif text in (BUTTONS["my_tickets"], BUTTONS["my_tasks"]):
