@@ -24,7 +24,15 @@ user_data: dict[int, dict] = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+
+    # 🛑 Захист від повторного запуску
+    if context.user_data.get("started"):
+        logger.info(f"/start уже був виконаний для uid={uid}")
+        return
+    context.user_data["started"] = True
+
     user_data[uid] = {"step": 0}
+    logger.info(f"/start виконано для uid={uid}, message: {update.message.text}")
 
     try:
         await context.bot.send_message(
@@ -38,6 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id,
             text="⚠️ Помилка при відображенні кнопок. Спробуйте ще раз або напишіть /start."
         )
+
 
 
 
