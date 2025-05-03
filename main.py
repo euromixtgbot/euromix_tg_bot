@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import logging
+import os
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -8,17 +9,24 @@ from telegram.ext import (
     filters
 )
 from datetime import datetime
-
 from dotenv import load_dotenv
 from config import TOKEN
 import handlers
 
+# Створити каталог logs/ якщо ще не існує
+os.makedirs("logs", exist_ok=True)
+
 # Завантаження змінних оточення
 load_dotenv()
 
+# Конфігурація логування у файл і консоль
 logging.basicConfig(
+    level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    handlers=[
+        logging.FileHandler("logs/bot.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -26,7 +34,7 @@ async def error_handler(update, context):
     logger.error("Exception while handling an update:", exc_info=context.error)
     if update and getattr(update, 'message', None):
         try:
-            await update.message.reply_text("\u26a0\ufe0f Сталася помилка. Спробуйте знову.")
+            await update.message.reply_text("⚠️ Сталася помилка. Спробуйте знову.")
         except Exception:
             pass
 
@@ -67,11 +75,8 @@ def main():
 
     # 4) Обробник помилок
     app.add_error_handler(error_handler)
-    
-    print("⚙️ BOT STARTED AT:", datetime.now())
 
-
-    # Запускаємо polling
+    logger.info("⚙️ BOT STARTED AT: %s", datetime.now())
     app.run_polling()
 
 if __name__ == "__main__":

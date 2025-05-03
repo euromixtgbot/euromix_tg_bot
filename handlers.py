@@ -24,6 +24,9 @@ from google_sheets_service import add_ticket
 # Сховище стану користувача в пам'яті процесу
 user_data: dict[int, dict] = {}
 
+import logging
+logger = logging.getLogger(__name__)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
@@ -43,14 +46,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu_markup
         )
     except Exception as e:
-        logger.exception("🚫 Помилка в функції start: %s", e)
+        logger.exception(f"🚫 start(): uid={uid}, exception={e}")
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="⚠️ Помилка при відображенні кнопок. Спробуйте ще раз або напишіть /start."
         )
-
-
-
 
 
 
@@ -178,6 +178,7 @@ async def comment_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    logger.info(f"[JIRA] User {uid} створює задачу")
     desc = user_data[uid].get("description", "").strip()
     summary = desc.split("\n", 1)[0]
     result = await create_jira_issue(summary, desc)
@@ -255,6 +256,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     Після цього лишаємо режим увімкненим.
     """
     uid = update.effective_user.id
+    logger.info(f"[COMMENT] User {uid} додає коментар")
     tid = user_data[uid].get("comment_task_id")
     text = update.message.text.strip()
 
@@ -325,6 +327,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+    logger.info(f"[UNIVERSAL] User {uid} надіслав повідомлення")
     text = update.message.text or ""
 
     # 1️⃣ Якщо медіа — передаємо в handle_media
