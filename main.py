@@ -65,6 +65,9 @@ def main():
 
     # 4) Обробник помилок
     app.add_error_handler(error_handler)
+    
+    print("⚙️ BOT STARTED AT:", datetime.now())
+
 
     # Запускаємо polling
     app.run_polling()
