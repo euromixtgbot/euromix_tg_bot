@@ -24,7 +24,7 @@ async def error_handler(update, context):
     logger.error("Exception while handling an update:", exc_info=context.error)
     if update and getattr(update, 'message', None):
         try:
-            await update.message.reply_text("⚠️ Сталася помилка. Спробуйте знову.")
+            await update.message.reply_text("\u26a0\ufe0f Сталася помилка. Спробуйте знову.")
         except Exception:
             pass
 
@@ -44,20 +44,26 @@ def main():
         )
     )
 
-    # 2) Універсальний хендлер: обробляє і текст, і медіа.
-    #    Сам він вирішує — чи в режимі коментаря, чи інша логіка.
+    # 2) Хендлер лише для медіа
     app.add_handler(
         MessageHandler(
             filters.Document.ALL |
             filters.PHOTO |
             filters.VIDEO |
-            filters.AUDIO |
-            (filters.TEXT & ~filters.COMMAND),
+            filters.AUDIO,
             handlers.universal_handler
         )
     )
 
-    # 3) Обробник помилок
+    # 3) Хендлер лише для тексту без команд
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            handlers.universal_handler
+        )
+    )
+
+    # 4) Обробник помилок
     app.add_error_handler(error_handler)
 
     # Запускаємо polling
