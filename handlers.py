@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import logging
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from telegram import (
     Update, KeyboardButton, ReplyKeyboardMarkup,
