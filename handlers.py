@@ -363,19 +363,19 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 2️⃣ Режим коментаря
     if user_data.get(uid, {}).get("user_comment_mode"):
         if text == BUTTONS["exit_comment"]:
-            # EXIT: вимикаємо режим і повертаємо головне меню
             user_data[uid]["user_comment_mode"] = False
             user_data[uid]["comment_task_id"] = None
-            await update.message.reply_text(
-                "🔙 Ви вийшли з режиму коментаря.",
-                reply_markup=main_menu_markup
-            )
+            await update.message.reply_text("🔙 Ви вийшли з режиму коментаря.", reply_markup=main_menu_markup)
         else:
-            # будь-який інший текст — додаємо коментар
             await add_comment_handler(update, context)
         return
 
-    # 3️⃣ Стандартна логіка
+    # 🛠 Виправлення: обробка натискання до перевірки task_id
+    if text == BUTTONS["check_status"]:
+        await check_status(update, context)
+        return
+
+    # 3️⃣ Інші дії
     if text == BUTTONS["help"]:
         await start(update, context)
     elif text in (BUTTONS["my_tickets"], BUTTONS["my_tasks"]):
@@ -384,8 +384,6 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data[uid] = {"step": 0}
         txt, markup = make_keyboard(0)
         await update.message.reply_text(txt, reply_markup=markup)
-    elif text == BUTTONS["check_status"]:
-        await check_status(update, context)
     elif text == BUTTONS["add_comment"]:
         await choose_task_for_comment(update, context)
     elif user_data.get(uid, {}).get("task_id"):
