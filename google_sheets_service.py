@@ -26,7 +26,7 @@ def connect_to_users_sheet():
         client = gspread.authorize(creds)
 
         sheet_id = os.getenv("GOOGLE_SHEET_users_ID")
-        return client.open_by_key(sheet_id).worksheet("users")
+        return client.open_by_key(sheet_id).sheet1  # 🟢 Використати перший аркуш
     except Exception as e:
         logger.error(f"[connect_to_users_sheet] ❌ Error: {e}")
         return None
@@ -72,19 +72,18 @@ async def identify_user_by_telegram(user_id: int, username: str = "", phone: str
                    "telegram_id", "telegram_username", "email", "account_id"]
 
         # Очистка номера від '+' та пробілів
-        phone = phone.lstrip("+").strip() if phone else ""
+        phone = phone.lstrip("+").replace(" ", "").strip() if phone else ""
 
         for idx, row in enumerate(rows):
             record = dict(zip(headers, row + [""] * (len(headers) - len(row))))
             row_index = idx + 2
 
-            row_phone = record.get("mobile_number", "").lstrip("+").strip()
+            row_phone = record.get("mobile_number", "").lstrip("+").replace(" ", "").strip()
             row_uid = record.get("telegram_id", "").strip()
             row_uname = record.get("telegram_username", "").strip().lower()
 
             # 1) Збіг по Telegram ID
             if str(user_id) == row_uid:
-                # оновити username, якщо пустий
                 if not row_uname and username:
                     sheet.update_cell(row_index, 7, username)
                 return record
