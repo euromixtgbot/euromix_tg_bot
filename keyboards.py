@@ -3,6 +3,16 @@ logger = logging.getLogger(__name__)
 
 from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
+
+def request_contact_keyboard():
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("📞 Надіслати номер телефону", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+
+
 # Основні етапи створення заявки
 STEPS = ["division", "department", "service", "full_name", "description", "confirm"]
 

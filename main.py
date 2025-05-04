@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import logging
 import os
+from datetime import datetime
+
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -8,10 +10,14 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters
 )
-from datetime import datetime
 from dotenv import load_dotenv
 from config import TOKEN
-import handlers
+from handlers import (
+    start,
+    handle_comment_callback,
+    universal_handler,
+    handle_contact
+)
 
 # Створити каталог logs/ якщо ще не існує
 os.makedirs("logs", exist_ok=True)
@@ -30,6 +36,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 async def error_handler(update, context):
     logger.error("Exception while handling an update:", exc_info=context.error)
     if update and getattr(update, 'message', None):
@@ -38,46 +45,37 @@ async def error_handler(update, context):
         except Exception:
             pass
 
+
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     # 0) Стартова команда
-    app.add_handler(
-        CommandHandler("start", handlers.start)
-    )
+    app.add_handler(CommandHandler("start", start))
 
     # 1) Обробка кліку на інлайн-кнопки comment_task_<ID>
-    app.add_handler(
-        CallbackQueryHandler(
-            handlers.handle_comment_callback,
-            pattern=r"^comment_task_"
-        )
-    )
+    app.add_handler(CallbackQueryHandler(handle_comment_callback, pattern=r"^comment_task_"))
 
     # 2) Хендлер лише для медіа
-    app.add_handler(
-        MessageHandler(
-            filters.Document.ALL |
-            filters.PHOTO |
-            filters.VIDEO |
-            filters.AUDIO,
-            handlers.universal_handler
-        )
-    )
+    app.add_handler(MessageHandler(
+        filters.Document.ALL |
+        filters.PHOTO |
+        filters.VIDEO |
+        filters.AUDIO,
+        universal_handler
+    ))
 
     # 3) Хендлер лише для тексту без команд
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handlers.universal_handler
-        )
-    )
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, universal_handler))
 
-    # 4) Обробник помилок
+    # 4) Контакт (номер телефону)
+    app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
+
+    # 5) Обробник помилок
     app.add_error_handler(error_handler)
 
     logger.info("⚙️ BOT STARTED AT: %s", datetime.now())
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()

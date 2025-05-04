@@ -30,27 +30,45 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
+    uname = user.username or ""
+
+    logger.info(f"[START] Запуск від UID={uid}, Username={uname}")
 
     if context.user_data.get("started"):
-        logger.info(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) повторно викликає /start")
+        logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) повторно викликає /start")
         return
-    context.user_data["started"] = True
 
+    context.user_data["started"] = True
     user_data[uid] = {"step": 0}
-    logger.info(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) викликав /start")
 
     try:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="👋 Вітаємо! Оберіть дію нижче:",
-            reply_markup=main_menu_markup
-        )
+        profile = await identify_user_by_telegram(uid, uname)
+        context.user_data["profile"] = profile
+
+        if profile:
+            fname = profile.get("full_name", "Користувач")
+            logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) авторизований як {fname}")
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"👋 Вітаю, {fname}! Оберіть дію нижче:",
+                reply_markup=main_menu_markup
+            )
+        else:
+            logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) не авторизований")
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="🔐 Ви ще не зареєстровані в системі. Надішліть номер телефону для авторизації:",
+                reply_markup=request_contact_keyboard()
+            )
+
     except Exception as e:
-        logger.exception(f"[START] User {uid} (@{user.username or '-'}, {user.first_name}) помилка: {e}")
+        logger.exception(f"[START] User {uid} (@{uname}, {user.first_name}) помилка: {e}")
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="⚠️ Помилка при відображенні кнопок. Спробуйте ще раз або напишіть /start."
+            text="⚠️ Сталася помилка. Спробуйте ще раз або зверніться до підтримки."
         )
+
+
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -404,3 +422,28 @@ async def exit_comment_mode(update: Update, uid: int):
         "🔙 Ви вийшли з режиму коментаря.",
         reply_markup=main_menu_markup
     )
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    uid = user.id
+    uname = user.username or ""
+    phone = update.message.contact.phone_number
+
+    logger.info(f"[CONTACT] Отримано номер {phone} від UID={uid}, @{uname}")
+
+    try:
+        profile = await identify_user_by_telegram(uid, uname, phone)
+        if profile:
+            context.user_data["started"] = True
+            context.user_data["profile"] = profile
+            fname = profile.get("full_name", "Користувач")
+            await update.message.reply_text(
+                f"✅ Вітаємо, {fname}! Ви авторизовані.",
+                reply_markup=main_menu_markup
+            )
+        else:
+            await update.message.reply_text(
+                "⛔ Номер не знайдено в базі. Зверніться до адміністратора.",
+            )
+    except Exception as e:
+        logger.exception(f"[CONTACT] Помилка обробки: {e}")
+        await update.message.reply_text("⚠️ Помилка. Спробуйте пізніше.")
