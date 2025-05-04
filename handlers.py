@@ -7,8 +7,10 @@ from telegram import (
     InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 )
 from telegram.ext import ContextTypes
-from google_sheets_service import get_user_tickets
+from google_sheets_service import get_user_tickets, add_ticket, identify_user_by_telegram 
+
 from keyboards import (
+
     make_keyboard, remove_keyboard, STEPS,
     main_menu_markup, after_create_menu_markup, mytickets_action_markup,
     comment_mode_markup, BUTTONS
