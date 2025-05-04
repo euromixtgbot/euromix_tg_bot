@@ -57,44 +57,54 @@ def connect_to_ticket_sheet():
 
 async def identify_user_by_telegram(user_id: int, username: str = "", phone: str = "") -> dict | None:
     """
-    Шукає користувача за telegram_id, username або номером телефону.
-    Якщо знайдено за username або телефоном — оновлює відсутні значення.
+    Повертає словник з даними користувача, якщо знайдено за:
+    - telegram_id
+    - telegram_username
+    - або номером телефону (з нормалізацією)
     """
     try:
         sheet = connect_to_users_sheet()
         if not sheet:
             return None
 
-        rows = sheet.get_all_values()[1:]  # Пропускаємо заголовок
-        headers = [
-            "user_key_1", "full_name", "division", "department",
-            "mobile_number", "telegram_id", "telegram_username",
-            "email", "account_id"
-        ]
+        rows = sheet.get_all_values()[1:]  # Пропускаємо заголовки
+        headers = ["user_key_1", "full_name", "division", "department", "mobile_number",
+                   "telegram_id", "telegram_username", "email", "account_id"]
+
+        # Очистка номера від '+' та пробілів
+        phone = phone.lstrip("+").strip() if phone else ""
 
         for idx, row in enumerate(rows):
             record = dict(zip(headers, row + [""] * (len(headers) - len(row))))
-            row_index = idx + 2  # бо get_all_values() з A2
+            row_index = idx + 2
 
-            # 1. Ідентифікація за telegram_id
-            if str(user_id) == record.get("telegram_id", "").strip():
+            row_phone = record.get("mobile_number", "").lstrip("+").strip()
+            row_uid = record.get("telegram_id", "").strip()
+            row_uname = record.get("telegram_username", "").strip().lower()
+
+            # 1) Збіг по Telegram ID
+            if str(user_id) == row_uid:
+                # оновити username, якщо пустий
+                if not row_uname and username:
+                    sheet.update_cell(row_index, 7, username)
                 return record
 
-            # 2. Ідентифікація за username
-            if username and username.lower() == record.get("telegram_username", "").lower():
-                if not record.get("telegram_id"):
-                    sheet.update_cell(row_index, 6 + 1, str(user_id))
+            # 2) Збіг по username
+            if username and username.lower() == row_uname:
+                if not row_uid:
+                    sheet.update_cell(row_index, 6, str(user_id))
                 return record
 
-            # 3. Ідентифікація за номером телефону
-            if phone and phone.strip() == record.get("mobile_number", "").strip():
-                if not record.get("telegram_id"):
-                    sheet.update_cell(row_index, 6 + 1, str(user_id))
-                if not record.get("telegram_username") and username:
-                    sheet.update_cell(row_index, 7 + 1, username)
+            # 3) Збіг по номеру телефону
+            if phone and phone == row_phone:
+                if not row_uid:
+                    sheet.update_cell(row_index, 6, str(user_id))
+                if not row_uname and username:
+                    sheet.update_cell(row_index, 7, username)
                 return record
 
         return None
+
     except Exception as e:
         logger.exception(f"[identify_user_by_telegram] ❌ Error: {e}")
         return None
