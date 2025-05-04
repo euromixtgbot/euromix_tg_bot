@@ -1,8 +1,7 @@
 import logging
-logger = logging.getLogger(__name__)
-
 from telegram import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
+logger = logging.getLogger(__name__)
 
 def request_contact_keyboard():
     return ReplyKeyboardMarkup(
@@ -10,8 +9,6 @@ def request_contact_keyboard():
         resize_keyboard=True,
         one_time_keyboard=True
     )
-
-
 
 # Основні етапи створення заявки
 STEPS = ["division", "department", "service", "full_name", "description", "confirm"]
@@ -35,15 +32,19 @@ OPTIONS = {
 
 # Системні ключі → Текст кнопок
 BUTTONS = {
-    "my_tickets":    "🧾 Мої заявки",
-    "my_tasks":      "🧾 Мої задачі",
-    "create_ticket": "🆕 Створити заявку",
-    "check_status":  "✅ Перевірити статус задачі",
-    "add_comment":   "📝 Додати коментар до задачі",
-    "exit_comment":  "❌ Вийти з режиму коментаря",
-    "help":          "ℹ️ Допомога",
-    "confirm_create":"Створити задачу",
-    "back":          "Назад"
+    "my_tickets":     "🧾 Мої заявки",
+    "my_tasks":       "🧾 Мої задачі",
+    "create_ticket":  "🆕 Створити заявку",
+    "check_status":   "✅ Перевірити статус задачі",
+    "add_comment":    "📝 Додати коментар до задачі",
+    "exit_comment":   "❌ Вийти з режиму коментаря",
+    "help":           "ℹ️ Допомога",
+    "confirm_create": "Створити задачу",
+    "back":           "Назад",
+
+    # 🆕 Додані кнопки для неавторизованих користувачів
+    "continue_unauthorized": "Продовжити без авторизації",
+    "restart":               "Повторити /start"
 }
 
 def make_keyboard(step: int, description: str = ""):

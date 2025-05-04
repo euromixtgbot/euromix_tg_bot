@@ -417,6 +417,16 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(txt, reply_markup=markup)
     elif text == BUTTONS["add_comment"]:
         await choose_task_for_comment(update, context)
+    elif text == BUTTONS["continue_unauthorized"]:
+        user_data[uid] = {"step": 0}
+        await update.message.reply_text(
+            "📋 Ви продовжили без авторизації. Меню дій:",
+            reply_markup=mytickets_action_markup
+        )
+        return
+    elif text == BUTTONS["restart"]:
+        await start(update, context)
+        return
     elif user_data.get(uid, {}).get("task_id"):
         await add_comment_handler(update, context)
     else:
@@ -453,7 +463,10 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "⛔ Номер не знайдено в базі. Зверніться до адміністратора.",
                 reply_markup=ReplyKeyboardMarkup(
-                    [["Продовжити без авторизації"], ["Повторити /start"]],
+                    [
+                        [KeyboardButton(BUTTONS["continue_unauthorized"])],
+                        [KeyboardButton(BUTTONS["restart"])]
+                    ],
                     resize_keyboard=True
                 )
             )
