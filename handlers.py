@@ -7,21 +7,26 @@ from telegram import (
     InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 )
 from telegram.ext import ContextTypes
-from google_sheets_service import get_user_tickets, add_ticket, identify_user_by_telegram 
+
+from google_sheets_service import (
+    get_user_tickets,
+    add_ticket,
+    identify_user_by_telegram
+)
 
 from keyboards import (
-
     make_keyboard, remove_keyboard, STEPS,
     main_menu_markup, after_create_menu_markup, mytickets_action_markup,
-    comment_mode_markup, BUTTONS
+    comment_mode_markup, BUTTONS,
+    request_contact_keyboard
 )
+
 from services import (
     create_jira_issue,
     attach_file_to_jira,
     add_comment_to_jira,
     get_issue_status
 )
-from google_sheets_service import add_ticket
 
 # Сховище стану користувача в пам'яті процесу
 user_data: dict[int, dict] = {}
@@ -44,7 +49,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data[uid] = {"step": 0}
 
     try:
-        profile = await identify_user_by_telegram(uid, uname)
+        # Перевіряємо, чи є очікування перевірки номера телефону
+        phone = context.user_data.get("pending_phone_check")
+        profile = await identify_user_by_telegram(uid, uname, phone)
         context.user_data["profile"] = profile
 
         if profile:
@@ -69,7 +76,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id,
             text="⚠️ Сталася помилка. Спробуйте ще раз або зверніться до підтримки."
         )
-
 
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -437,6 +443,7 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if profile:
             context.user_data["started"] = True
             context.user_data["profile"] = profile
+            context.user_data.pop("pending_phone_check", None)  # Видаляємо pending_phone_check
             fname = profile.get("full_name", "Користувач")
             await update.message.reply_text(
                 f"✅ Вітаємо, {fname}! Ви авторизовані.",
