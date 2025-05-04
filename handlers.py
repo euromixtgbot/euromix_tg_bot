@@ -452,6 +452,10 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(
                 "⛔ Номер не знайдено в базі. Зверніться до адміністратора.",
+                reply_markup=ReplyKeyboardMarkup(
+                    [["Продовжити без авторизації"], ["Повторити /start"]],
+                    resize_keyboard=True
+                )
             )
     except Exception as e:
         logger.exception(f"[CONTACT] Помилка обробки: {e}")

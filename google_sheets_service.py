@@ -79,13 +79,14 @@ async def identify_user_by_telegram(user_id: int, username: str = "", phone: str
                    "telegram_id", "telegram_username", "email", "account_id"]
 
         # Нормалізація вхідного номера
-        phone = normalize_phone(phone) if phone else ""
+        phone = phone.replace(" ", "").replace("-", "").lstrip("+").strip() if phone else ""
 
         for idx, row in enumerate(rows):
             record = dict(zip(headers, row + [""] * (len(headers) - len(row))))
             row_index = idx + 2
 
-            row_phone = normalize_phone(record.get("mobile_number", ""))
+            # Нормалізація номера телефону з таблиці
+            row_phone = record.get("mobile_number", "").replace(" ", "").replace("-", "").lstrip("+").strip()
             row_uid = record.get("telegram_id", "").strip()
             row_uname = record.get("telegram_username", "").strip().lower()
 
