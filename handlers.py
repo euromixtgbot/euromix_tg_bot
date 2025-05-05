@@ -158,8 +158,9 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
     )
 
     # Перевести бота в режим коментування
-    context.user_data["in_comment_mode"] = True
-    context.user_data["current_issue"] = issue_id
+    # ставимо прапорець і зберігаємо ключ задачі для наступного коментаря
+    context.user_data["user_comment_mode"] = True
+    context.user_data["comment_task_id"] = issue_id
 
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -171,7 +172,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     uid = user.id
     logger.info(f"[COMMENT] User {uid} (@{user.username or '-'}, {user.first_name}) додає коментар")
 
-    if not user_data.get(uid, {}).get("user_comment_mode"):
+    if not context.user_data.get("user_comment_mode"):
         return  # не в режимі — пропускаємо
 
     text = update.message.text
@@ -187,7 +188,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # 2) Власне коментар
-    task_id = user_data[uid].get("comment_task_id")
+    task_id = context.user_data.get("comment_task_id")
     if not task_id:
         # якщо раптом немає прив’язки — просто виходимо
         user_data[uid]["user_comment_mode"] = False
@@ -281,15 +282,16 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     uid = user.id
     logger.info(f"[COMMENT] User {uid} (@{user.username or '-'}, {user.first_name}) додає коментар")
 
-    if not user_data.get(uid, {}).get("user_comment_mode"):
+    if not context.user_data.get("user_comment_mode"):
         return  # не в режимі — пропускаємо
 
     text = update.message.text.strip()
 
     # 1) Вихід із режиму
     if text == BUTTONS["exit_comment"]:
-        user_data[uid]["user_comment_mode"] = False
-        user_data[uid]["comment_task_id"] = None
+        context.user_data["user_comment_mode"] = False
+        context.user_data["comment_task_id"] = None
+       
         await update.message.reply_text(
             "🔙 Ви вийшли з режиму коментаря.",
             reply_markup=main_menu_markup
@@ -297,7 +299,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     # 2) Власне коментар
-    task_id = user_data[uid].get("comment_task_id")
+    task_id = context.user_data.get("comment_task_id")
     if not task_id:
         # якщо раптом немає прив’язки — просто виходимо
         user_data[uid]["user_comment_mode"] = False
