@@ -163,32 +163,55 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
     context.user_data["comment_task_id"] = issue_id
 
 
+# ─────────────────────────────────────────────────────────────────────────────
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Створює задачу в Jira і показує меню after_create"""
+    """
+    Формує payload з усього, що накопичилось у context.user_data + profile,
+    відправляє в Jira, заносить у Google Sheets і повертає меню.
+    """
     user = update.effective_user
     uid = user.id
-    logger.info(f"[JIRA] User {uid} створює задачу")
+    profile = context.user_data.get("profile", {})
 
-    # Формуємо payload для Jira
-    payload = {
-        "summary": context.user_data.get("summary"),
-        "description": context.user_data.get("description"),
-        # інші поля…
-    }
-    issue_key = await create_jira_issue(payload)
-
-    # Додаємо задачу в Google Sheets
-    await add_ticket({
-        "issue_key": issue_key,
-        "telegram_user_id": uid,
-        "telegram_chat_id": update.effective_chat.id,
-        "telegram_username": user.username
-    })
-
-    await update.message.reply_text(
-        f"✅ Задача створена: {issue_key}",
-        reply_markup=after_create_menu_markup
+    # Формуємо сам опис
+    description = (
+        f"ПІБ: {profile.get('full_name','-')}\n"
+        f"Підрозділ: {profile.get('division','-')}\n"
+        f"Департамент: {profile.get('department','-')}\n"
+        f"Сервіс: {context.user_data.get('service','-')}\n"
+        f"Опис проблеми: {context.user_data.get('description','-')}\n\n"
+        f"tg id: {uid}\n"
+        f"tg username: {user.username or '-'}\n"
+        f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
+
+    payload = {
+        "summary": f"Заявка від {profile.get('full_name','-')}",
+        "description": description,
+        # ...інші обов’язкові поля Jira...
+    }
+
+    try:
+        issue_key = await create_jira_issue(payload)
+        # заносимо в Google Sheets
+        await add_ticket({
+            "issue_key": issue_key,
+            "telegram_user_id": uid,
+            "telegram_chat_id": update.effective_chat.id,
+            "telegram_username": user.username or ""
+        })
+        # відповідаємо
+        await update.message.reply_text(
+            f"✅ Задача створена: {issue_key}",
+            reply_markup=main_menu_markup
+        )
+    except Exception as e:
+        logger.exception(f"[JIRA] Помилка створення задачі: {e}")
+        await update.message.reply_text(
+            "⛔ Сталася помилка при створенні задачі. Спробуйте знову.",
+            reply_markup=main_menu_markup
+        )
+
 
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -293,51 +316,73 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception(f"[STATUS] User {uid} (@{user.username or '-'}, {user.first_name}) — помилка: {e}")
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
 
+# ─────────────────────────────────────────────────────────────────────────────
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробляє всі тексти, не вписані в пріоритетні гілки"""
+    """Обробляє відповіді на кроки форми створення заявки."""
     text = update.message.text or ""
-    uid = update.effective_user.id
-
-    # 1️⃣ Кроки створення заявки
     step = context.user_data.get("step")
+
     if step is not None:
-        # Зберігаємо відповідь попереднього кроку
+        # 1) зберігаємо відповідь
         key = STEPS[step]
         context.user_data[key] = text
 
-        # Визначаємо наступний крок:
-        # — якщо ми саме після вибору service (step==2) і юзер уже авторизований, 
-        #   то стрибаємо full_name (3) → description (4)
-        if step == 2 and context.user_data.get("profile"):
-            next_step = 4
+        # 2) якщо ми щойно отримали description (останній крок) — показуємо фінальний огляд
+        if step == len(STEPS) - 1:
+            profile = context.user_data["profile"] or {}
+            summary = (
+                f"*Опис заявки:*  \n"
+                f"ПІБ: {profile.get('full_name', '-') }  \n"
+                f"Підрозділ: {profile.get('division','-')}  \n"
+                f"Департамент: {profile.get('department','-')}  \n"
+                f"Сервіс: {context.user_data.get('service','-')}  \n"
+                f"Опис проблеми: {context.user_data.get('description','-')}  \n\n"
+                f"tg id: {update.effective_user.id}  \n"
+                f"tg username: {update.effective_user.username or '-'}  \n"
+                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            # кнопки «Створити задачу» та «Назад»
+            await update.message.reply_text(
+                summary,
+                parse_mode="Markdown",
+                reply_markup=after_create_menu_markup
+            )
+            # скидаємо step, щоб клавіатура після цього оброблялася як меню
+            context.user_data.pop("step")
+            return
+
+        # 3) обчислюємо наступний крок
+        # для авторизованих: пропускаємо full_name (крок 2) → переходимо одразу до service (крок 3)
+        if context.user_data.get("profile") and step == 1:
+            next_step = 3
         else:
             next_step = step + 1
 
         context.user_data["step"] = next_step
+        prompt, markup = make_keyboard(next_step, context.user_data.get("description",""))
+        await update.message.reply_text(prompt, reply_markup=markup)
+        return
 
-        # Формуємо і показуємо наступне запитання
-        description = context.user_data.get("description", "")
-        prompt, markup = make_keyboard(next_step, description)
-        return await update.message.reply_text(prompt, reply_markup=markup)
-
-    # 2️⃣ Якщо жоден крок не активний — невідома команда
+    # якщо step не встановлений — це не форма, тому невідома команда
     await update.message.reply_text(
         "Невідома команда. Оберіть дію з меню:",
         reply_markup=main_menu_markup
     )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
     text = update.message.text or ""
-    logger.info(f"[UNIVERSAL] User {uid} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
+    logger.info(f"[UNIVERSAL] User {uid} (@{user.username or '-'}, {user.first_name}) sent: {text}")
 
-    # 0️⃣ Пріоритет: перевірка статусу
+    # 0️⃣ Перевірка статусу
     if text == BUTTONS["check_status"]:
         await check_status(update, context)
         return
 
-    # 1️⃣ Пріоритет: будь-яке медіа
+    # 1️⃣ Будь-яке медіа
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
         return
@@ -355,30 +400,39 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await add_comment_handler(update, context)
         return
 
-    # 3️⃣ Стандартна логіка кнопок
+    # 3️⃣ Головне меню
     if text == BUTTONS["help"]:
         await start(update, context)
     elif text == BUTTONS["my_tickets"]:
         await mytickets_handler(update, context)
+
+    # 4️⃣ Створити заявку
     elif text == BUTTONS["create_ticket"]:
-        # Якщо користувач авторизований — починаємо з кроку service (2), інакше — з division (0)
+        # якщо вже авторизовані — стрибаємо division & department & full_name
         start_step = 2 if context.user_data.get("profile") else 0
         context.user_data["step"] = start_step
         prompt, markup = make_keyboard(start_step)
         await update.message.reply_text(prompt, reply_markup=markup)
+
+    # 5️⃣ Показати форму коментаря
     elif text == BUTTONS["add_comment"]:
         await choose_task_for_comment(update, context)
-    elif text == BUTTONS["continue_unauthorized"]:
-        context.user_data["step"] = 0
-        await update.message.reply_text(
-            "📋 Ви продовжили без авторизації. Меню дій:",
-            reply_markup=mytickets_action_markup
-        )
-    elif text == BUTTONS["restart"]:
-        await start(update, context)
+
+    # 6️⃣ Підтвердження створення задачі
+    elif text == BUTTONS["confirm"]:
+        await send_to_jira(update, context)
+
+    # 7️⃣ «Назад» у формі (якщо ви використовуєте таку кнопку)
+    elif text == BUTTONS.get("back"):
+        prev = max(0, context.user_data.get("step", 1) - 1)
+        context.user_data["step"] = prev
+        prompt, markup = make_keyboard(prev, context.user_data.get("description",""))
+        await update.message.reply_text(prompt, reply_markup=markup)
+
     else:
-        # будь-який інший текст передаємо у handle_message
+        # будь-який інший текст — у загальний обробник
         await handle_message(update, context)
+
 
 async def exit_comment_mode(update: Update, uid: int):
     # Вимикаємо режим коментаря
