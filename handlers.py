@@ -434,7 +434,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await choose_task_for_comment(update, context)
 
     # 6️⃣ Підтвердження створення задачі
-    elif text == BUTTONS["confirm"]:
+    elif text == BUTTONS["confirm_create"]:
         await send_to_jira(update, context)
 
     # 7️⃣ «Назад» у формі (якщо ви використовуєте таку кнопку)

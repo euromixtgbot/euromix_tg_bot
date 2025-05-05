@@ -19,7 +19,7 @@ STEPS = [
     "full_name",     # 2
     "service",       # 3
     "description",   # 4
-    "confirm"        # 5
+    "confirm_create"        # 5
 ]
 
 # Варіанти для відповідних кроків
@@ -61,7 +61,7 @@ def make_keyboard(step: int, description: str = "") -> tuple[str, ReplyKeyboardM
     name = STEPS[step]
 
     # Підбираємо кнопки
-    if name == "confirm":
+    if name == "confirm_create":
         buttons = [[KeyboardButton(BUTTONS["confirm_create"])]]
     else:
         # Якщо для цього кроку є OPTIONS — показуємо їх, інакше залишаємо поле для вводу
@@ -80,7 +80,7 @@ def make_keyboard(step: int, description: str = "") -> tuple[str, ReplyKeyboardM
         "full_name":   "Введіть ваше Прізвище та Ім'я:",
         "service":     "Оберіть Сервіс:",
         "description": "Опишіть вашу проблему:",
-        "confirm":     (
+        "confirm_create":     (
             f"Натисніть '{BUTTONS['confirm_create']}', якщо все заповнено.\n\n"
             f"Опис задачі:\n{description}"
         )
