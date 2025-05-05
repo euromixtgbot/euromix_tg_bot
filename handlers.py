@@ -124,7 +124,7 @@ async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons.append([InlineKeyboardButton(label, callback_data=f"comment_task_{issue_id}")])
 
     await update.message.reply_text(
-        "🖋️ Оберіть задачу для коментаря:",
+        "🖋️ Оберіть задачу для перегляду деталей:",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -361,6 +361,12 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     text = update.message.text
+
+    # --- ДОДАНО: обробка кнопки "Мої заявки"
+    if text == BUTTONS["my_tickets"]:
+        # Повертаємо результат виклику, щоб не йти далі по коду
+        return await mytickets_handler(update, context)
+
     if uid not in user_data:
         await update.message.reply_text("Будь ласка, натисніть /start")
         return

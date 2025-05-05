@@ -87,6 +87,7 @@ main_menu_markup = ReplyKeyboardMarkup(
 # Меню після створення нової задачі
 after_create_menu_markup = ReplyKeyboardMarkup(
     [
+       [KeyboardButton(BUTTONS["check_status"])], 
         [KeyboardButton(BUTTONS["my_tickets"])],
         [KeyboardButton(BUTTONS["check_status"])],
         [KeyboardButton(BUTTONS["help"])]
