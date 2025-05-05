@@ -67,7 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def mytickets_handler(update, context):
     user_id = update.effective_user.id
     # 1) Дістаємо всі записи–заявки з Google Sheets
-    records = await get_user_tickets(user_id)
+    records =  get_user_tickets(user_id)
 
     if not records:
         return await update.message.reply_text(
@@ -96,7 +96,7 @@ async def mytickets_handler(update, context):
 
 async def choose_task_for_comment(update, context):
     uid = update.effective_user.id
-    tickets = await get_user_tickets(uid)  # Added await to make it asynchronous
+    tickets =  get_user_tickets(uid)  # Added await to make it asynchronous
 
     if not tickets:
         return await update.message.reply_text(
