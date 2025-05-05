@@ -88,8 +88,7 @@ main_menu_markup = ReplyKeyboardMarkup(
 after_create_menu_markup = ReplyKeyboardMarkup(
     [
        [KeyboardButton(BUTTONS["check_status"])], 
-        [KeyboardButton(BUTTONS["my_tickets"])],
-        [KeyboardButton(BUTTONS["check_status"])],
+        [KeyboardButton(BUTTONS["back"])], 
         [KeyboardButton(BUTTONS["help"])]
     ],
     resize_keyboard=True
