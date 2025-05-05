@@ -414,6 +414,20 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["step"] = start_step
         prompt, markup = make_keyboard(start_step)
         await update.message.reply_text(prompt, reply_markup=markup)
+        # якщо вже авторизовані — стрибаємо division, department, full_name
+        profile = context.user_data.get("profile")
+        if profile:
+            # підтягуємо дані з профілю
+            context.user_data["division"]   = profile.get("division")
+            context.user_data["department"] = profile.get("department")
+            context.user_data["full_name"]  = profile.get("full_name")
+            start_step = 2  # 0=division, 1=department, 2=service
+        else:
+            start_step = 0
+
+        context.user_data["step"] = start_step
+        prompt, markup = make_keyboard(start_step)
+        await update.message.reply_text(prompt, reply_markup=markup)
 
     # 5️⃣ Показати форму коментаря
     elif text == BUTTONS["add_comment"]:
