@@ -43,6 +43,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if context.user_data.get("started"):
         logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) повторно викликає /start")
+        
+        # 🔽 Додано: повторна перевірка, якщо профіль ще не знайдено
+        if not context.user_data.get("profile"):
+            phone = context.user_data.get("pending_phone_check")
+            profile = await identify_user_by_telegram(uid, uname, phone)
+            context.user_data["profile"] = profile
+
+            if profile:
+                fname = profile.get("full_name", "Користувач")
+                logger.info(f"[START] (повторно) User {uid} авторизований як {fname}")
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=f"👋 Вітаю, {fname}! Оберіть дію нижче:",
+                    reply_markup=main_menu_markup
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="🔐 Ви ще не авторизовані. Надішліть номер телефону для авторизації:",
+                    reply_markup=request_contact_keyboard()
+                )
         return
 
     context.user_data["started"] = True
