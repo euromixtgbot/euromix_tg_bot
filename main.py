@@ -11,6 +11,10 @@ from telegram.ext import (
     filters
 )
 from dotenv import load_dotenv
+
+# Завантаження змінних оточення перед імпортом конфігурації
+load_dotenv()
+
 from config import TOKEN
 from handlers import (
     start,
@@ -21,9 +25,6 @@ from handlers import (
 
 # Створити каталог logs/ якщо ще не існує
 os.makedirs("logs", exist_ok=True)
-
-# Завантаження змінних оточення
-load_dotenv()
 
 # Конфігурація логування у файл і консоль
 logging.basicConfig(

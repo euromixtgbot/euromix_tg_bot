@@ -121,3 +121,13 @@ async def get_issue_status(issue_id: str) -> str:
         r.raise_for_status()
         data = r.json()
         return data["fields"]["status"]["name"]
+        
+async def get_issue_summary(issue_id: str) -> str:
+    """
+    Повертає поле summary із Jira.
+    """
+    url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}?fields=summary"
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url, headers=_jira_auth_header(), timeout=10.0)
+        r.raise_for_status()
+        return r.json()["fields"]["summary"]

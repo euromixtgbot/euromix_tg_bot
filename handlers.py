@@ -75,14 +75,17 @@ async def mytickets_handler(update, context):
             reply_markup=main_menu_markup
         )
 
-    # 2) Формуємо Inline-кнопки для кожної заявки
+    # 2) Формуємо список Inline-кнопок з ключами і статусами
     buttons = []
     for rec in records:
-        issue_key = rec["issue_key"]
-        status = await get_issue_status(issue_key)
+        issue_key = rec["Ticket_ID"]
+        try:
+            status = await get_issue_status(issue_key)
+        except Exception:
+            status = "❓ помилка"
         buttons.append([InlineKeyboardButton(
             f"{issue_key} — {status}",
-            callback_data=issue_key
+            callback_data=f"comment_task_{issue_key}"
         )])
 
     # 3) Відправляємо список
@@ -91,47 +94,35 @@ async def mytickets_handler(update, context):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-async def choose_task_for_comment(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    """
-    Відображає користувачу до 10 останніх заявок з кнопками для вибору
-    задачі, до якої він хоче додати коментар.
-    """
+async def choose_task_for_comment(update, context):
     uid = update.effective_user.id
+    tickets = await get_user_tickets(uid)  # Added await to make it asynchronous
 
-    # 1) Отримуємо всі заявки користувача
-    tickets = await get_user_tickets(uid)
-
-    # 2) Якщо заявок немає — повертаємося в головне меню
     if not tickets:
-        await update.message.reply_text(
+        return await update.message.reply_text(
             "❗️ У вас немає заявок для коментаря.",
             reply_markup=main_menu_markup
         )
-        return
 
-    # 3) Сортуємо за датою створення (Created_At) та беремо останні 10
+    # Сортуємо й беремо останні 10
     sorted_tickets = sorted(
         tickets,
         key=lambda t: t.get("Created_At", ""),
         reverse=True
     )[:10]
 
-    # 4) Формуємо список Inline-кнопок
     keyboard = []
-    for rec in sorted_tickets:
-        issue_id = rec.get("Ticket_ID") or rec.get("issue_key") or "N/A"
+    for t in sorted_tickets:
+        issue_id = t.get("Ticket_ID")
         try:
             status = await get_issue_status(issue_id)
         except Exception:
             status = "❓ помилка"
-        label = f"{issue_id} — {status}"
-        callback_data = f"comment_task_{issue_id}"
-        keyboard.append([InlineKeyboardButton(label, callback_data=callback_data)])
+        keyboard.append([InlineKeyboardButton(
+            f"{issue_id} — {status}",
+            callback_data=f"comment_task_{issue_id}"
+        )])
 
-    # 5) Відправляємо повідомлення з меню вибору
     await update.message.reply_text(
         "🖋️ Натисніть на задачу, щоб переглянути деталі та додати коментар:",
         reply_markup=InlineKeyboardMarkup(keyboard)
