@@ -35,97 +35,46 @@ import logging
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Старт та головне меню"""
     user = update.effective_user
     uid = user.id
     uname = user.username or ""
 
-    logger.info(f"[START] Запуск від UID={uid}, Username={uname}")
+    logger.info(f"[START] User {uid} (@{uname}) викликав /start")
 
-    if context.user_data.get("started"):
-        logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) повторно викликає /start")
-        
-        # 🔽 Додано: повторна перевірка, якщо профіль ще не знайдено
-        if not context.user_data.get("profile"):
-            phone = context.user_data.get("pending_phone_check")
-            profile = await identify_user_by_telegram(uid, uname, phone)
-            context.user_data["profile"] = profile
+    # Ідентифікація користувача
+    phone = context.user_data.get("pending_phone_check")
+    profile = await identify_user_by_telegram(uid, uname, phone)
+    context.user_data["profile"] = profile
 
-            if profile:
-                fname = profile.get("full_name", "Користувач")
-                logger.info(f"[START] (повторно) User {uid} авторизований як {fname}")
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=f"👋 Вітаю, {fname}! Оберіть дію нижче:",
-                    reply_markup=main_menu_markup
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text="🔐 Ви ще не авторизовані. Надішліть номер телефону для авторизації:",
-                    reply_markup=request_contact_keyboard()
-                )
-        return
-
-    context.user_data["started"] = True
-    user_data[uid] = {"step": 0}
-
-    try:
-        # Перевіряємо, чи є очікування перевірки номера телефону
-        phone = context.user_data.get("pending_phone_check")
-        profile = await identify_user_by_telegram(uid, uname, phone)
-        context.user_data["profile"] = profile
-
-        if profile:
-            fname = profile.get("full_name", "Користувач")
-            logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) авторизований як {fname}")
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"👋 Вітаю, {fname}! Оберіть дію нижче:",
-                reply_markup=main_menu_markup
-            )
-        else:
-            logger.info(f"[START] User {uid} (@{uname}, {user.first_name}) не авторизований")
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="🔐 Ви ще не зареєстровані в системі. Надішліть номер телефону для авторизації:",
-                reply_markup=request_contact_keyboard()
-            )
-
-    except Exception as e:
-        logger.exception(f"[START] User {uid} (@{uname}, {user.first_name}) помилка: {e}")
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="⚠️ Сталася помилка. Спробуйте ще раз або зверніться до підтримки."
+    if profile:
+        fname = profile.get("full_name", "Користувач")
+        logger.info(f"[START] User {uid} авторизований як {fname}")
+        await update.message.reply_text(
+            f"👋 Вітаю, {fname}! Оберіть дію:",
+            reply_markup=main_menu_markup
+        )
+    else:
+        logger.info(f"[START] User {uid} не авторизований")
+        await update.message.reply_text(
+            "🔐 Ви ще не авторизовані. Надішліть номер телефону для авторизації:",
+            reply_markup=request_contact_keyboard()
         )
 
+    context.user_data['started'] = True
 
 async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показує список заявок"""
     uid = update.effective_user.id
-    tickets = get_user_tickets(uid)
+    tickets = await get_issue_status(uid)
+
     if not tickets:
         await update.message.reply_text("❗️ У вас немає створених заявок.")
         return
 
-    sorted_tickets = sorted(
-        tickets,
-        key=lambda t: t.get("Created_At", ""),
-        reverse=True
-    )[:10]
-
-    buttons = []
-    for t in sorted_tickets:
-        issue_id = t.get("Ticket_ID", "N/A")
-        try:
-            status = await get_issue_status(issue_id)
-        except Exception:
-            status = "❓ помилка"
-        label = f"{issue_id} — {status}"
-        # callback_data з префіксом comment_task_
-        buttons.append([InlineKeyboardButton(label, callback_data=f"comment_task_{issue_id}")])
-
     await update.message.reply_text(
-        "🖋️ Оберіть задачу для перегляду деталей:",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        "Ваші заявки:\n" + "\n".join(tickets),
+        reply_markup=mytickets_action_markup
     )
 
 async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -225,38 +174,31 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=comment_mode_markup
         )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Створює задачу в Jira і показує меню after_create"""
     user = update.effective_user
     uid = user.id
-    logger.info(f"[JIRA] User {uid} (@{user.username or '-'}, {user.first_name}) створює задачу")
-    desc = user_data[uid].get("description", "").strip()
-    summary = desc.split("\n", 1)[0]
-    result = await create_jira_issue(summary, desc)
-    code = result["status_code"]
+    logger.info(f"[JIRA] User {uid} створює задачу")
 
-    if code == 201:
-        issue_key = result["json"]["key"]
-        # Переходимо у режим додавання коментаря після створення
-        user_data[uid]["task_id"] = issue_key
-        user_data[uid]["user_comment_mode"] = True
-        user_data[uid]["comment_task_id"] = issue_key
+    # Формуємо payload для Jira
+    payload = {
+        "summary": context.user_data.get("summary"),
+        "description": context.user_data.get("description"),
+        # інші поля…
+    }
+    issue_key = await create_jira_issue(payload)
 
-        try:
-            add_ticket(
-                ticket_id=issue_key,
-                telegram_user_id=uid,
-                telegram_chat_id=update.effective_chat.id,
-                telegram_username=update.effective_user.username
-            )
-        except Exception as e:
-            logger.error(f"[GoogleSheets] ❗ Помилка при записі в таблицю: {e}")
+    # Додаємо задачу в Google Sheets
+    await add_ticket({
+        "issue_key": issue_key,
+        "telegram_user_id": uid,
+        "telegram_chat_id": update.effective_chat.id,
+        "telegram_username": user.username
+    })
 
-        await update.message.reply_text(
-            f"✅ Задача створена: {issue_key}",
-            reply_markup=after_create_menu_markup
-        )
-    else:
-        err = result["json"].get("errorMessages") or result["json"]
-        await update.message.reply_text(f"❌ Помилка створення задачі: {code}: {err}")
+    await update.message.reply_text(
+        f"✅ Задача створена: {issue_key}",
+        reply_markup=after_create_menu_markup
+    )
 
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -359,48 +301,49 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
+    """Обробляє текстові повідомлення"""
     text = update.message.text
 
-    # --- ДОДАНО: обробка кнопки "Мої заявки"
+    # Вихід у головне меню
+    if text == BUTTONS["exit"]:
+        return await start(update, context)
+
+    # Мої заявки
     if text == BUTTONS["my_tickets"]:
-        # Повертаємо результат виклику, щоб не йти далі по коду
         return await mytickets_handler(update, context)
 
-    if uid not in user_data:
-        await update.message.reply_text("Будь ласка, натисніть /start")
+    # Перевірка статусу
+    if text == BUTTONS["check_status"]:
+        issue_id = context.user_data.get("last_created_issue")
+        status = await get_issue_status(issue_id)
+        return await update.message.reply_text(
+            f"Статус {issue_id}: {status}",
+            reply_markup=after_create_menu_markup
+        )
+
+    # Режим коментарів
+    if context.user_data.get("in_comment_mode"):
+        # … обробка коментаря …
         return
 
-    step = user_data[uid].get("step", 0)
-    key = STEPS[step]
+    # Створення нової заявки
+    if text == BUTTONS["create_ticket"]:
+        context.user_data["step"] = 0
+        prompt, markup = make_keyboard(0)
+        return await update.message.reply_text(prompt, reply_markup=markup)
 
-    if text == BUTTONS["back"]:
-        user_data[uid]["step"] = max(0, step - 1)
-        key_to_clear = STEPS[user_data[uid]["step"]]
-        user_data[uid][key_to_clear] = ""
-        txt, mkp = make_keyboard(user_data[uid]["step"], user_data[uid].get("description", ""))
-        await update.message.reply_text(txt, reply_markup=mkp)
-        return
+    # Інша логіка: обробка STEPS, confirm тощо…
+    step = context.user_data.get("step")
+    if step is not None:
+        prompt, markup = make_keyboard(step, context.user_data.get("description", ""))
+        # … оновлюємо step, зберігаємо дані …
+        return await update.message.reply_text(prompt, reply_markup=markup)
 
-    if key in ("division", "department", "service", "full_name"):
-        user_data[uid][key] = text
-    elif key == "description":
-        user_data[uid].setdefault("description", "")
-        user_data[uid]["description"] += text + "\n"
-    elif key == "confirm":
-        if text == BUTTONS["confirm_create"]:
-            await send_to_jira(update, context)
-            return
-        else:
-            user_data[uid].setdefault("description", "")
-            user_data[uid]["description"] += text + "\n"
-            txt, mkp = make_keyboard(step, user_data[uid]["description"])
-            await update.message.reply_text(txt, reply_markup=mkp)
-            return
-
-    user_data[uid]["step"] = min(len(STEPS) - 1, step + 1)
-    txt, mkp = make_keyboard(user_data[uid]["step"], user_data[uid].get("description", ""))
-    await update.message.reply_text(txt, reply_markup=mkp)
+    # За замовчуванням — невідома команда/текст
+    await update.message.reply_text(
+        "Невідома команда. Оберіть дію з меню:",
+        reply_markup=main_menu_markup
+    )
 
 async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user

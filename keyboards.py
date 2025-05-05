@@ -39,6 +39,7 @@ BUTTONS = {
     "exit_comment":   "❌ Вийти з режиму коментаря",
     "help":           "ℹ️ Допомога",
     "confirm_create": "Створити задачу",
+    "exit":           "Вийти на головну", 
     "back":           "Назад",
 
     # 🆕 Додані кнопки для неавторизованих користувачів
@@ -88,7 +89,7 @@ main_menu_markup = ReplyKeyboardMarkup(
 after_create_menu_markup = ReplyKeyboardMarkup(
     [
        [KeyboardButton(BUTTONS["check_status"])], 
-        [KeyboardButton(BUTTONS["back"])], 
+        [KeyboardButton(BUTTONS["exit"])], 
         [KeyboardButton(BUTTONS["help"])]
     ],
     resize_keyboard=True
