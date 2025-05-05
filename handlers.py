@@ -294,45 +294,33 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Помилка при отриманні статусу: {e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробляє текстові повідомлення"""
-    text = update.message.text
+    """Обробляє всі тексти, не вписані в пріоритетні гілки"""
+    text = update.message.text or ""
+    uid = update.effective_user.id
 
-    # Вихід у головне меню
-    if text == BUTTONS["exit"]:
-        return await start(update, context)
-
-    # Мої заявки
-    if text == BUTTONS["my_tickets"]:
-        return await mytickets_handler(update, context)
-
-    # Перевірка статусу
-    if text == BUTTONS["check_status"]:
-        issue_id = context.user_data.get("last_created_issue")
-        status = await get_issue_status(issue_id)
-        return await update.message.reply_text(
-            f"Статус {issue_id}: {status}",
-            reply_markup=after_create_menu_markup
-        )
-
-    # Режим коментарів
-    if context.user_data.get("in_comment_mode"):
-        # … обробка коментаря …
-        return
-
-    # Створення нової заявки
-    if text == BUTTONS["create_ticket"]:
-        context.user_data["step"] = 0
-        prompt, markup = make_keyboard(0)
-        return await update.message.reply_text(prompt, reply_markup=markup)
-
-    # Інша логіка: обробка STEPS, confirm тощо…
+    # 1️⃣ Кроки створення заявки
     step = context.user_data.get("step")
     if step is not None:
-        prompt, markup = make_keyboard(step, context.user_data.get("description", ""))
-        # … оновлюємо step, зберігаємо дані …
+        # Зберігаємо відповідь попереднього кроку
+        key = STEPS[step]
+        context.user_data[key] = text
+
+        # Визначаємо наступний крок:
+        # — якщо ми саме після вибору service (step==2) і юзер уже авторизований, 
+        #   то стрибаємо full_name (3) → description (4)
+        if step == 2 and context.user_data.get("profile"):
+            next_step = 4
+        else:
+            next_step = step + 1
+
+        context.user_data["step"] = next_step
+
+        # Формуємо і показуємо наступне запитання
+        description = context.user_data.get("description", "")
+        prompt, markup = make_keyboard(next_step, description)
         return await update.message.reply_text(prompt, reply_markup=markup)
 
-    # За замовчуванням — невідома команда/текст
+    # 2️⃣ Якщо жоден крок не активний — невідома команда
     await update.message.reply_text(
         "Невідома команда. Оберіть дію з меню:",
         reply_markup=main_menu_markup
@@ -344,12 +332,12 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     logger.info(f"[UNIVERSAL] User {uid} (@{user.username or '-'}, {user.first_name}) надіслав: {text}")
 
-    # 0️⃣ Спочатку перевіряємо кнопки, які мають пріоритет
+    # 0️⃣ Пріоритет: перевірка статусу
     if text == BUTTONS["check_status"]:
         await check_status(update, context)
-        return  # Важливо повернутися, щоб уникнути подальшої обробки
+        return
 
-    # 1️⃣ Якщо медіа — передаємо в handle_media
+    # 1️⃣ Пріоритет: будь-яке медіа
     if update.message.document or update.message.photo or update.message.video or update.message.audio:
         await handle_media(update, context)
         return
@@ -359,38 +347,37 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == BUTTONS["exit_comment"]:
             context.user_data["user_comment_mode"] = False
             context.user_data["comment_task_id"] = None
-            return await update.message.reply_text(
+            await update.message.reply_text(
                 "🔙 Ви вийшли з режиму коментаря.",
                 reply_markup=main_menu_markup
             )
         else:
-            # будь-який інший текст — додаємо як коментар
-            return await add_comment_handler(update, context)
+            await add_comment_handler(update, context)
+        return
 
-    # 3️⃣ Стандартна логіка
+    # 3️⃣ Стандартна логіка кнопок
     if text == BUTTONS["help"]:
         await start(update, context)
     elif text == BUTTONS["my_tickets"]:
         await mytickets_handler(update, context)
     elif text == BUTTONS["create_ticket"]:
-        user_data[uid] = {"step": 0}
-        txt, markup = make_keyboard(0)
-        await update.message.reply_text(txt, reply_markup=markup)
+        # Якщо користувач авторизований — починаємо з кроку service (2), інакше — з division (0)
+        start_step = 2 if context.user_data.get("profile") else 0
+        context.user_data["step"] = start_step
+        prompt, markup = make_keyboard(start_step)
+        await update.message.reply_text(prompt, reply_markup=markup)
     elif text == BUTTONS["add_comment"]:
         await choose_task_for_comment(update, context)
     elif text == BUTTONS["continue_unauthorized"]:
-        user_data[uid] = {"step": 0}
+        context.user_data["step"] = 0
         await update.message.reply_text(
             "📋 Ви продовжили без авторизації. Меню дій:",
             reply_markup=mytickets_action_markup
         )
-        return
     elif text == BUTTONS["restart"]:
         await start(update, context)
-        return
-    elif user_data.get(uid, {}).get("task_id"):
-        await add_comment_handler(update, context)
     else:
+        # будь-який інший текст передаємо у handle_message
         await handle_message(update, context)
 
 async def exit_comment_mode(update: Update, uid: int):
