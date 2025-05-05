@@ -137,7 +137,9 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
     3) Відправляє нове повідомлення з оновленим текстом і клавіатурою comment_mode_markup
     """
     query = update.callback_query
-    issue_id = query.data
+    raw = query.data
+    # обрізаємо префікс "comment_task_"
+    issue_id = raw[len("comment_task_"):] if raw.startswith("comment_task_") else raw
     await query.answer()
 
     # 1) Статус
