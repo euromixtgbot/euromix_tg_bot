@@ -1,9 +1,8 @@
 # services.py
 import logging
-logger = logging.getLogger(__name__)
-
 import base64
 import io
+
 import httpx
 from config import (
     JIRA_DOMAIN,
@@ -14,10 +13,12 @@ from config import (
     JIRA_REPORTER_ACCOUNT_ID,
 )
 
+logger = logging.getLogger(__name__)
+
+
 def _jira_auth_header() -> dict:
     """
-    Повертає заголовки для авторизації Basic Auth у Jira API,
-    включно з Content-Type: application/json.
+    Повертає заголовки для Basic Auth у Jira API.
     """
     token = base64.b64encode(f"{JIRA_EMAIL}:{JIRA_API_TOKEN}".encode()).decode()
     return {
@@ -26,68 +27,65 @@ def _jira_auth_header() -> dict:
         "Content-Type": "application/json",
     }
 
-async def create_jira_issue(summary: str, description: str) -> dict:
+
+async def create_jira_issue(payload: dict) -> str:
     """
-    Створює задачу в Jira. Повертає словник з полями:
-      - status_code: HTTP статус
-      - json: розбір JSON-відповіді (якщо є)
-    Використовує reporter.accountId для призначення автора.
+    Створює задачу в Jira.
+    Вхідний payload має містити ключі:
+      - summary: str
+      - description: str
+    Повертає рядок-ключ створеної задачі (наприклад "TES1-123").
     """
     url = f"{JIRA_DOMAIN}/rest/api/3/issue"
-    payload = {
+    jira_body = {
         "fields": {
             "project": {"key": JIRA_PROJECT_KEY},
-            "summary": summary,
+            "summary": payload["summary"],
             "description": {
                 "type": "doc",
                 "version": 1,
                 "content": [{
                     "type": "paragraph",
-                    "content": [{"type": "text", "text": description}]
+                    "content": [{"type": "text", "text": payload["description"]}]
                 }]
             },
             "issuetype": {"name": JIRA_ISSUE_TYPE},
-            "reporter": {"accountId": JIRA_REPORTER_ACCOUNT_ID}
+            "reporter": {"accountId": JIRA_REPORTER_ACCOUNT_ID},
         }
     }
+
     async with httpx.AsyncClient() as client:
         r = await client.post(
             url,
             headers=_jira_auth_header(),
-            json=payload,
+            json=jira_body,
             timeout=15.0
         )
-        try:
-            j = r.json()
-        except ValueError:
-            j = {}
-        return {"status_code": r.status_code, "json": j}
+        r.raise_for_status()
+        data = r.json()
+        issue_key = data.get("key")
+        if not issue_key:
+            raise RuntimeError(f"Jira did not return issue key: {data!r}")
+        return issue_key
+
 
 async def attach_file_to_jira(issue_id: str, filename: str, content: bytes) -> httpx.Response:
     """
-    Прикріплює файл (будь-які байти) до задачі в Jira.
-    Щоб httpx правильно сформував multipart/form-data, видаляємо
-    Content-Type із базових заголовків і обгортаємо content в BytesIO.
+    Прикріплює файл до задачі в Jira.
     """
     url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}/attachments"
-
-    # Базові заголовки без Content-Type
     headers = _jira_auth_header().copy()
     headers.pop("Content-Type", None)
     headers["X-Atlassian-Token"] = "no-check"
 
-    # wrap bytes into file-like object
     file_obj = io.BytesIO(content)
     files = {
-        "file": (
-            filename,
-            file_obj,
-            "application/octet-stream"
-        )
+        "file": (filename, file_obj, "application/octet-stream")
     }
 
     async with httpx.AsyncClient() as client:
         return await client.post(url, headers=headers, files=files)
+
 
 async def add_comment_to_jira(issue_id: str, comment: str) -> httpx.Response:
     """
@@ -111,9 +109,10 @@ async def add_comment_to_jira(issue_id: str, comment: str) -> httpx.Response:
             json=body
         )
 
+
 async def get_issue_status(issue_id: str) -> str:
     """
-    Повертає назву поточного статусу задачі в Jira.
+    Повертає поточний статус задачі в Jira.
     """
     url = f"{JIRA_DOMAIN}/rest/api/3/issue/{issue_id}"
     async with httpx.AsyncClient() as client:
@@ -121,7 +120,8 @@ async def get_issue_status(issue_id: str) -> str:
         r.raise_for_status()
         data = r.json()
         return data["fields"]["status"]["name"]
-        
+
+
 async def get_issue_summary(issue_id: str) -> str:
     """
     Повертає поле summary із Jira.

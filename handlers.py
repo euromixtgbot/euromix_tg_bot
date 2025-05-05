@@ -173,34 +173,35 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = user.id
     profile = context.user_data.get("profile", {})
 
-    # Формуємо сам опис
+    # Формуємо опис задачі
     description = (
-        f"ПІБ: {profile.get('full_name','-')}\n"
-        f"Підрозділ: {profile.get('division','-')}\n"
-        f"Департамент: {profile.get('department','-')}\n"
-        f"Сервіс: {context.user_data.get('service','-')}\n"
-        f"Опис проблеми: {context.user_data.get('description','-')}\n\n"
+        f"ПІБ: {profile.get('full_name', '-')}\n"
+        f"Підрозділ: {profile.get('division', '-')}\n"
+        f"Департамент: {profile.get('department', '-')}\n"
+        f"Сервіс: {context.user_data.get('service', '-')}\n"
+        f"Опис проблеми: {context.user_data.get('description', '-')}\n\n"
         f"tg id: {uid}\n"
         f"tg username: {user.username or '-'}\n"
         f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     payload = {
-        "summary": f"Заявка від {profile.get('full_name','-')}",
+        "summary": f"Заявка від {profile.get('full_name', '-')}",
         "description": description,
-        # ...інші обов’язкові поля Jira...
+        # якщо є інші обов’язкові поля, додайте їх сюди
     }
 
     try:
-        issue_key = await create_jira_issue(payload)
-        # заносимо в Google Sheets
+        # Створюємо задачу в Jira
+        issue_key = await create_jira_issue(payload["summary"], payload["description"])
+        # Заносимо запис у Google Sheets
         await add_ticket({
             "issue_key": issue_key,
             "telegram_user_id": uid,
             "telegram_chat_id": update.effective_chat.id,
             "telegram_username": user.username or ""
         })
-        # відповідаємо
+        # Відповідь користувачу
         await update.message.reply_text(
             f"✅ Задача створена: {issue_key}",
             reply_markup=main_menu_markup
