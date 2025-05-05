@@ -188,12 +188,15 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payload = {
         "summary": f"Заявка від {profile.get('full_name', '-')}",
         "description": description,
-        # якщо є інші обов’язкові поля, додайте їх сюди
     }
 
     try:
-        # Створюємо задачу в Jira
-        issue_key = await create_jira_issue(payload["summary"], payload["description"])
+        # Викликаємо новий підпис: (summary, description)
+        resp = await create_jira_issue(payload["summary"], payload["description"])
+        if resp["status_code"] != 201 or "key" not in resp["json"]:
+            raise RuntimeError(f"Jira API error: {resp}")
+        issue_key = resp["json"]["key"]
+
         # Заносимо запис у Google Sheets
         await add_ticket({
             "issue_key": issue_key,
@@ -201,6 +204,7 @@ async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "telegram_chat_id": update.effective_chat.id,
             "telegram_username": user.username or ""
         })
+
         # Відповідь користувачу
         await update.message.reply_text(
             f"✅ Задача створена: {issue_key}",
