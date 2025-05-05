@@ -25,7 +25,8 @@ from services import (
     create_jira_issue,
     attach_file_to_jira,
     add_comment_to_jira,
-    get_issue_status
+    get_issue_status,
+    get_issue_summary
 )
 
 # Сховище стану користувача в пам'яті процесу
