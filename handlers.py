@@ -430,7 +430,7 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3️⃣ Стандартна логіка
     if text == BUTTONS["help"]:
         await start(update, context)
-    elif text in (BUTTONS["my_tickets"], BUTTONS["my_tasks"]):
+    elif text == BUTTONS["my_tickets"]:
         await mytickets_handler(update, context)
     elif text == BUTTONS["create_ticket"]:
         user_data[uid] = {"step": 0}

@@ -33,7 +33,6 @@ OPTIONS = {
 # Системні ключі → Текст кнопок
 BUTTONS = {
     "my_tickets":     "🧾 Мої заявки",
-    "my_tasks":       "🧾 Мої задачі",
     "create_ticket":  "🆕 Створити заявку",
     "check_status":   "✅ Перевірити статус задачі",
     "add_comment":    "📝 Додати коментар до задачі",
@@ -88,7 +87,7 @@ main_menu_markup = ReplyKeyboardMarkup(
 # Меню після створення нової задачі
 after_create_menu_markup = ReplyKeyboardMarkup(
     [
-        [KeyboardButton(BUTTONS["my_tasks"])],
+        [KeyboardButton(BUTTONS["my_tickets"])],
         [KeyboardButton(BUTTONS["check_status"])],
         [KeyboardButton(BUTTONS["help"])]
     ],
