@@ -63,69 +63,109 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['started'] = True
 
-async def mytickets_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показує список заявок"""
-    uid = update.effective_user.id
-    tickets = await get_issue_status(uid)
 
-    if not tickets:
-        await update.message.reply_text("❗️ У вас немає створених заявок.")
-        return
+async def mytickets_handler(update, context):
+    user_id = update.effective_user.id
+    # 1) Дістаємо всі записи–заявки з Google Sheets
+    records = await get_user_tickets(user_id)
 
+    if not records:
+        return await update.message.reply_text(
+            "У вас немає відкритих заявок.",
+            reply_markup=main_menu_markup
+        )
+
+    # 2) Формуємо Inline-кнопки для кожної заявки
+    buttons = []
+    for rec in records:
+        issue_key = rec["issue_key"]
+        status = await get_issue_status(issue_key)
+        buttons.append([InlineKeyboardButton(
+            f"{issue_key} — {status}",
+            callback_data=issue_key
+        )])
+
+    # 3) Відправляємо список
     await update.message.reply_text(
-        "Ваші заявки:\n" + "\n".join(tickets),
-        reply_markup=mytickets_action_markup
+        "✒️ Оберіть задачу для перегляду деталей:",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-async def choose_task_for_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def choose_task_for_comment(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    """
+    Відображає користувачу до 10 останніх заявок з кнопками для вибору
+    задачі, до якої він хоче додати коментар.
+    """
     uid = update.effective_user.id
-    tickets = get_user_tickets(uid)
 
+    # 1) Отримуємо всі заявки користувача
+    tickets = await get_user_tickets(uid)
+
+    # 2) Якщо заявок немає — повертаємося в головне меню
     if not tickets:
-        await update.message.reply_text("❗️ У вас немає заявок для коментаря.", reply_markup=None)
+        await update.message.reply_text(
+            "❗️ У вас немає заявок для коментаря.",
+            reply_markup=main_menu_markup
+        )
         return
 
-    # Відсортувати за датою і взяти останні 10
+    # 3) Сортуємо за датою створення (Created_At) та беремо останні 10
     sorted_tickets = sorted(
         tickets,
         key=lambda t: t.get("Created_At", ""),
         reverse=True
     )[:10]
 
-    buttons = []
-    for t in sorted_tickets:
-        issue_id = t.get("Ticket_ID", "N/A")
+    # 4) Формуємо список Inline-кнопок
+    keyboard = []
+    for rec in sorted_tickets:
+        issue_id = rec.get("Ticket_ID") or rec.get("issue_key") or "N/A"
         try:
             status = await get_issue_status(issue_id)
         except Exception:
             status = "❓ помилка"
         label = f"{issue_id} — {status}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"comment_task_{issue_id}")])
+        callback_data = f"comment_task_{issue_id}"
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback_data)])
 
-    markup = InlineKeyboardMarkup(buttons)
+    # 5) Відправляємо повідомлення з меню вибору
     await update.message.reply_text(
-        "🖋️ Натисніть на задачу щоб переглянути детальніше і додати коментар:",
-        reply_markup=markup
+        "🖋️ Натисніть на задачу, щоб переглянути деталі та додати коментар:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # 1) обробляє клік на інлайн-кнопку «comment_task_<ID>»
 async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробляє натиск на кнопку з issue_id:
+    1) Дістає статус із Jira
+    2) Дістає summary із Jira
+    3) Відправляє нове повідомлення з оновленим текстом і клавіатурою comment_mode_markup
+    """
     query = update.callback_query
+    issue_id = query.data
     await query.answer()
-    await query.message.edit_reply_markup(reply_markup=None)
 
-    uid = query.from_user.id
-    task_id = query.data.replace("comment_task_", "", 1)
+    # 1) Статус
+    status = await get_issue_status(issue_id)
+    # 2) Summary
+    summary = await get_issue_summary(issue_id)
 
-    user_data.setdefault(uid, {})
-    user_data[uid]["user_comment_mode"] = True
-    user_data[uid]["comment_task_id"] = task_id
-
-    # Запит на перший коментар + кнопка ❌
+    # 3) Новий текст замість старого
     await query.message.reply_text(
-        f"✍️ Ви пишете коментар до {task_id}.\nНадішліть текст або натисніть ❌ для виходу.",
+        f"✍️ Задача {issue_id} - статус: {status}\n"
+        f"Summary: {summary}\n"
+        "____\n"
+        "Напишіть коментар до задачі, чи натисніть ❌ для виходу.",
         reply_markup=comment_mode_markup
     )
+
+    # Перевести бота в режим коментування
+    context.user_data["in_comment_mode"] = True
+    context.user_data["current_issue"] = issue_id
 
 async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
