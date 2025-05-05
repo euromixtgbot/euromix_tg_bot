@@ -162,52 +162,7 @@ async def handle_comment_callback(update: Update, context: ContextTypes.DEFAULT_
     context.user_data["user_comment_mode"] = True
     context.user_data["comment_task_id"] = issue_id
 
-async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обробляє текст у режимі коментування.
-    Якщо text == BUTTONS['exit_comment'] — виходить в головне меню,
-    інакше — відправляє коментар і лишається в режимі.
-    """
-    user = update.effective_user
-    uid = user.id
-    logger.info(f"[COMMENT] User {uid} (@{user.username or '-'}, {user.first_name}) додає коментар")
 
-    if not context.user_data.get("user_comment_mode"):
-        return  # не в режимі — пропускаємо
-
-    text = update.message.text
-
-    # 1) Вихід із режиму
-    if text == BUTTONS["exit_comment"]:
-        user_data[uid]["user_comment_mode"] = False
-        user_data[uid]["comment_task_id"] = None
-        await update.message.reply_text(
-            "🔙 Ви вийшли з режиму коментаря.",
-            reply_markup=main_menu_markup
-        )
-        return
-
-    # 2) Власне коментар
-    task_id = context.user_data.get("comment_task_id")
-    if not task_id:
-        # якщо раптом немає прив’язки — просто виходимо
-        user_data[uid]["user_comment_mode"] = False
-        return
-
-    resp = await add_comment_to_jira(task_id, text)
-
-    if resp.status_code == 201:
-        await update.message.reply_text(
-            f"✅ Коментар додано до задачі {task_id}\n\n"
-            "Можете продовжувати писати нові коментарі або натиснути ❌ для виходу.",
-            reply_markup=comment_mode_markup
-        )
-    else:
-        await update.message.reply_text(
-            f"⛔ Помилка додавання коментаря: {resp.status_code}\n\n"
-            "Спробуйте ще раз або натисніть ❌ для виходу.",
-            reply_markup=comment_mode_markup
-        )
 async def send_to_jira(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Створює задачу в Jira і показує меню after_create"""
     user = update.effective_user
@@ -302,7 +257,7 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     task_id = context.user_data.get("comment_task_id")
     if not task_id:
         # якщо раптом немає прив’язки — просто виходимо
-        user_data[uid]["user_comment_mode"] = False
+        context.user_data["user_comment_mode"] = False
         return
 
     resp = await add_comment_to_jira(task_id, text)
@@ -313,12 +268,14 @@ async def add_comment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             "Можете продовжувати писати нові коментарі або натиснути 🔙 для виходу.",
             reply_markup=comment_mode_markup
         )
+        return
     else:
         await update.message.reply_text(
             f"⛔ Помилка додавання коментаря: {resp.status_code}\n\n"
             "Спробуйте ще раз або натисніть 🔙 для виходу.",
             reply_markup=comment_mode_markup
         )
+        return
 
 async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -398,19 +355,17 @@ async def universal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 2️⃣ Режим коментаря
-    if user_data.get(uid, {}).get("user_comment_mode"):
+    if context.user_data.get("user_comment_mode"):
         if text == BUTTONS["exit_comment"]:
-            # EXIT: вимикаємо режим і повертаємо головне меню
-            user_data[uid]["user_comment_mode"] = False
-            user_data[uid]["comment_task_id"] = None
-            await update.message.reply_text(
+            context.user_data["user_comment_mode"] = False
+            context.user_data["comment_task_id"] = None
+            return await update.message.reply_text(
                 "🔙 Ви вийшли з режиму коментаря.",
                 reply_markup=main_menu_markup
             )
         else:
-            # будь-який інший текст — додаємо коментар
-            await add_comment_handler(update, context)
-        return
+            # будь-який інший текст — додаємо як коментар
+            return await add_comment_handler(update, context)
 
     # 3️⃣ Стандартна логіка
     if text == BUTTONS["help"]:
